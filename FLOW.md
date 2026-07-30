@@ -1,167 +1,155 @@
 # Alur Aplikasi — AuditForge
 
-Dokumen ini menjelaskan **alur kerja end-to-end** AuditForge: dari keluaran perkakas
-pemindaian sampai laporan audit final. Prinsip yang mendasari seluruh alur:
+Dokumen ini menjelaskan **urutan alur kerja** AuditForge dari awal sampai laporan jadi,
+dijelaskan langkah demi langkah.
+
+Prinsip yang mendasari seluruh alur:
 
 > **AI hanya membuat draf. Auditor adalah pengambil keputusan akhir.**
-> Semua tahap non-AI (parse, dedup, enrichment, triase, masking, perakitan laporan,
-> metrik) bersifat **deterministik** dan teruji tanpa memanggil LLM.
 
-AuditForge bekerja pada tahap **pascapengujian** — ia **tidak** memindai/mengeksploitasi
-sistem apa pun.
-
----
-
-## 1. Alur nilai utama (end-to-end)
-
-```mermaid
-flowchart TD
-    A["Keluaran perkakas<br/>(Nuclei/ZAP/Nmap/Burp/SARIF)"] -->|unggah manual UI<br/>atau folder terpantau R3| B[Simpan mentah ke MinIO<br/>+ ScanUpload]
-    B --> C[Parse → temuan terpadu<br/>deteksi perkakas via sniff]
-    C --> D[Normalisasi keparahan]
-    D --> E[Enrichment<br/>CWE · OWASP · CVSS · CVE]
-    E --> F[Deduplikasi<br/>gabung lintas perkakas/berkas]
-    F --> G[Triase deterministik<br/>prioritas P1–P4]
-    G --> H{Naratif AI?}
-    H -->|ya| I[Masking data sensitif] --> J[LLM susun draf<br/>deskripsi/dampak/remediasi] --> K[Unmask + tandai 'buatan AI']
-    H -->|manual| L[Auditor tulis naratif]
-    K --> M[Tinjau auditor]
-    L --> M
-    M -->|setujui| N[Temuan disetujui]
-    M -->|tolak / positif palsu| X[Dikecualikan dari laporan]
-    N --> O[Rakit laporan<br/>hanya temuan disetujui]
-    O --> P["Laporan DOCX / PDF<br/>+ kop, grafik, bukti"]
-```
-
-**Ringkas per tahap:**
-
-| # | Tahap | Sifat | Modul |
-|---|---|---|---|
-| 1 | Ingest berkas (unggah UI / folder terpantau) | Deterministik | `api/routes/engagements`, `ingest/watcher` |
-| 2 | Parse → skema temuan terpadu | Deterministik | `parsers/` (5 perkakas + `sniff`) |
-| 3 | Normalisasi keparahan | Deterministik | `normalize` |
-| 4 | Enrichment (CWE/OWASP/CVSS/CVE) | Deterministik | `enrichment` |
-| 5 | Deduplikasi (fingerprint, gabung) | Deterministik | `normalize` |
-| 6 | Triase prioritas P1–P4 | Deterministik | `triage` |
-| 7 | Draf naratif + ringkasan eksekutif | **AI** (+ masking) | `ai/narrative`, `ai/summary`, `ai/masking`, `ai/llm` |
-| 8 | Tinjau · sunting · setujui | **Manusia** (auditor) | `review`, `models/finding` |
-| 9 | Rakit & terbitkan laporan | Deterministik | `reporting/` (DOCX/PDF/HTML/charts) |
-| 10 | Evaluasi terukur | Deterministik | `eval/engagement_eval` |
+Semua tahap non-AI (parse, dedup, enrichment, triase, masking, perakitan laporan) bersifat
+**deterministik** — hasilnya pasti dan bisa diuji tanpa memanggil AI. AuditForge bekerja pada
+tahap **pascapengujian**; ia tidak memindai atau mengeksploitasi sistem apa pun.
 
 ---
 
-## 2. Peran & tanggung jawab
+## A. Alur utama: dari keluaran perkakas sampai laporan
 
-```mermaid
-flowchart LR
-    An[Analis] -->|buat penugasan, unggah,<br/>jalankan proses, susun draf| Sys[(AuditForge)]
-    Au[Auditor] -->|tinjau, sunting, SETUJUI,<br/>terbitkan laporan| Sys
-    Ad[Administrator] -->|kelola pengguna/peran,<br/>konfig LLM, jejak audit| Sys
-    Sys -.->|metadata tersamar| LLM[Layanan AI / LLM<br/>agnostik-penyedia]
-    LLM -.->|draf naratif| Sys
-```
+Urutannya seperti ini:
 
-- **Analis** — menyiapkan penugasan, mengunggah keluaran perkakas, menjalankan pemrosesan,
-  menyusun draf. **Tidak** boleh menyetujui.
-- **Auditor** — meninjau, menyunting, **menyetujui/menolak/menandai positif palsu**,
+**1. Buat penugasan.**
+Analis membuat sebuah penugasan (proyek audit) sebagai wadah untuk satu klien — berisi
+seluruh berkas, temuan, dan laporan.
+
+**2. Masukkan berkas keluaran perkakas.**
+Analis mengunggah berkas hasil pemindaian (Nuclei, ZAP, Nmap, Burp, atau SARIF) lewat UI.
+Berkas mentah disimpan ke MinIO, dan dibuat catatan `ScanUpload`. *(Alternatif tanpa unggah
+manual: taruh berkas di folder terpantau — lihat bagian D.)*
+
+**3. Uraikan berkas menjadi temuan.**
+Sistem mengenali jenis perkakas secara otomatis (`sniff`), lalu parser mengubah isi berkas
+menjadi **temuan** dalam satu skema terpadu. Proses ini berjalan di latar (Celery) sehingga
+UI tetap responsif. Berkas yang gagal diurai ditandai `failed` tanpa mengganggu berkas lain.
+
+**4. Normalisasi keparahan.**
+Tingkat keparahan dari berbagai perkakas (yang formatnya beda-beda) disatukan ke satu skala
+baku: critical / high / medium / low / info.
+
+**5. Pengayaan (enrichment).**
+Tiap temuan dipetakan ke **CWE** dan **OWASP Top 10**, dihitung **skor CVSS v3.1**, dan
+ditautkan ke **CVE** bila ada. Bila CVE dikenal, CWE/skor yang kurang bisa di-backfill.
+
+**6. Deduplikasi.**
+Sistem membuat sidik jari (fingerprint) tiap temuan, lalu **menggabungkan temuan yang sama**
+— baik dari berkas berbeda maupun perkakas berbeda. Yang digabung mencatat semua asalnya dan
+menaikkan hitungan kemunculan; keparahan/CVSS tertinggi yang menang.
+
+**7. Triase prioritas.**
+Sistem menghitung prioritas **P1–P4** secara deterministik dari keparahan + skor CVSS +
+jumlah kemunculan + ada/tidaknya CVE. Ini membantu auditor tahu mana yang harus ditangani
+duluan.
+
+**8. Susun draf naratif dengan AI (opsional, tapi umum).**
+Untuk temuan terpilih, sistem:
+   - **menyamarkan data sensitif** dulu (IP internal, hostname, kredensial, email) →
+     jadi `[IP-INTERNAL-1]`, `[SECRET-1]`, dst;
+   - mengirim permintaan terstruktur ke LLM → LLM mengembalikan **draf**
+     deskripsi, dampak, langkah reproduksi, dan remediasi;
+   - **memulihkan** data yang disamarkan pada hasilnya, menyimpannya sebagai draf, dan
+     **menandainya "buatan AI"** beserta model + versi prompt.
+
+   Sistem juga bisa membuat **ringkasan eksekutif** per penugasan dengan cara serupa. Bila AI
+   tidak dipakai, auditor menulis naratif manual.
+
+**9. Tinjau & setujui (auditor).**
+Auditor membuka tiap temuan, membaca naratif (bagian buatan AI ditandai jelas), **menyunting
+bila perlu**, mengonfirmasi/menolak kandidat positif palsu, lalu menetapkan status:
+**disetujui**, **ditolak**, atau **positif palsu**. Setiap suntingan & perubahan status
+tercatat di riwayat versi. Bukti (tangkapan layar) bisa dilampirkan di sini.
+
+**10. Terbitkan laporan.**
+Sistem merakit laporan **hanya dari temuan yang disetujui** (naratif final auditor menang
+atas draf AI), lengkap dengan kop surat, ringkasan eksekutif, grafik (distribusi keparahan +
+matriks risiko), dan bukti. Laporan diunduh sebagai **DOCX** atau **PDF**, atau dipratinjau
+sebagai HTML.
+
+**11. Evaluasi.**
+Tab Ringkasan menampilkan metrik terukur: efisiensi dedup, cakupan draf AI, kemajuan review,
+dan rasio suntingan auditor — untuk mengukur nilai yang diberikan sistem.
+
+---
+
+## B. Siapa melakukan apa (peran)
+
+- **Analis** — membuat penugasan, mengunggah berkas, menjalankan pemrosesan, menyusun draf.
+  **Tidak** boleh menyetujui temuan.
+- **Auditor** — meninjau, menyunting, dan **menyetujui/menolak/menandai positif palsu**;
   menerbitkan laporan. **Pemegang keputusan akhir.**
-- **Administrator** — mengelola pengguna & peran, konfigurasi LLM (panel Admin), dan
+- **Administrator** — mengelola pengguna & peran, mengatur konfigurasi LLM (panel Admin), dan
   memantau jejak audit.
 
-RBAC (fail-closed): status persetujuan (approved/rejected/false_positive) **hanya**
-untuk auditor/admin; analis boleh menyunting & mengajukan.
+Pembatasan akses bersifat *fail-closed*: status persetujuan hanya bisa diubah auditor/admin;
+analis hanya boleh menyunting dan mengajukan.
 
 ---
 
-## 3. Siklus status satu temuan
+## C. Urutan status sebuah temuan
 
-```mermaid
-stateDiagram-v2
-    [*] --> draft: hasil parse (+ draf AI)
-    draft --> in_review: analis ajukan
-    in_review --> approved: auditor setujui
-    in_review --> rejected: auditor tolak
-    in_review --> false_positive: auditor tandai FP
-    approved --> in_review: buka kembali
-    rejected --> in_review: buka kembali
-    false_positive --> in_review: buka kembali
-    approved --> [*]: masuk laporan
-```
+Sebuah temuan bergerak melalui status berikut:
 
-Setiap transisi & suntingan naratif tercatat di **riwayat versi** (`finding_revisions`) —
-termasuk asal draf AI (model + versi prompt) vs suntingan auditor. Hanya temuan
-**approved** yang masuk laporan.
+1. **draft** — baru hasil parse (mungkin sudah punya draf AI).
+2. **in_review** — analis mengajukannya untuk ditinjau.
+3. Dari in_review, auditor memilih salah satu:
+   - **approved** — disetujui → **masuk laporan**;
+   - **rejected** — ditolak → dikecualikan dari laporan;
+   - **false_positive** — positif palsu → dikecualikan dari laporan.
+4. Status apa pun bisa **dibuka kembali** (reopen) → kembali ke in_review bila perlu revisi.
+
+Hanya temuan **approved** yang muncul di laporan akhir. Semua transisi tercatat di riwayat
+versi (`finding_revisions`), termasuk membedakan asal draf AI vs suntingan auditor.
 
 ---
 
-## 4. Batas AI ↔ Manusia ↔ Deterministik
+## D. Alur auto-ingest folder terpantau (R3)
 
-```mermaid
-flowchart TD
-    subgraph DET[Deterministik - dapat diuji tanpa LLM]
-        P[Parse] --> N[Normalisasi] --> EN[Enrichment] --> DD[Dedup] --> TR[Triase]
-    end
-    subgraph AI[Lapisan AI - hanya draf]
-        MK[Masking data sensitif] --> DR[Draf naratif/ringkasan] --> UM[Unmask + tandai AI]
-    end
-    subgraph HUM[Keputusan manusia]
-        RV[Tinjau/sunting] --> AP[Setujui / tolak / FP]
-    end
-    TR --> MK
-    UM --> RV
-    AP --> RPT[Laporan - hanya yang disetujui]
-```
+Alternatif tanpa unggah manual lewat UI:
 
-**Masking** menjamin data sensitif (IP internal, hostname, kredensial, email) **tak pernah
-sampai ke LLM** — disamarkan jadi `[IP-INTERNAL-1]`, `[HOST-1]`, `[SECRET-1]`, … lalu hasil
-AI dipulihkan (unmask) di server. Untuk data sangat rahasia, Base URL LLM dapat diarahkan
-ke model lokal/on-premise sehingga tidak ada data yang keluar.
+1. Auditor/skrip menaruh berkas di `datasets/watch/inbox/<engagement_id>/`.
+2. Penjadwal (Celery **beat**) memindai folder itu **tiap ~30 detik**.
+3. Berkas yang sudah stabil (bukan yang baru saja ditulis) **diserap otomatis**: disimpan ke
+   MinIO, dibuat `ScanUpload`, perkakas dideteksi otomatis.
+4. Masuk **pipeline yang sama** dengan unggah manual (langkah A3–A7).
+5. Berkas lalu dipindah ke `processed/<id>/` (berhasil) atau `failed/<id>/` (gagal).
 
 ---
 
-## 5. Auto-ingest folder terpantau (R3)
+## E. Batas AI ↔ Manusia ↔ Deterministik
 
-Alternatif tanpa unggah manual — auditor cukup menaruh berkas di folder terpantau:
-
-```mermaid
-flowchart LR
-    U["Taruh berkas di<br/>inbox/&lt;engagement_id&gt;/"] --> B[Celery beat<br/>scan tiap 30 dtk]
-    B --> S["scan_inbox:<br/>berkas stabil?"]
-    S -->|ya| I[Ingest: MinIO + ScanUpload<br/>auto-sniff perkakas]
-    I --> PL[Pipeline sama:<br/>parse→dedup→enrich→triase]
-    PL --> M{berhasil?}
-    M -->|ya| PR["pindah ke processed/"]
-    M -->|tidak| FA["pindah ke failed/"]
-```
-
-Berkas yang baru ditulis (< 5 dtk) dilewati agar tak mengurai berkas separuh. Temuan masuk
-ke pipeline dedup/enrichment/triase yang **sama** dengan unggah manual.
+- **Deterministik** (parse → normalisasi → enrichment → dedup → triase) — logika pasti,
+  teruji, tanpa AI.
+- **AI** (draf naratif & ringkasan) — hanya membuat **usulan**; selalu didahului **masking**
+  sehingga data sensitif **tak pernah sampai ke LLM**. Untuk data sangat rahasia, Base URL
+  LLM bisa diarahkan ke model lokal/on-premise agar tidak ada data yang keluar.
+- **Manusia** (auditor) — meninjau, menyunting, dan **memutuskan**. Laporan hanya berisi yang
+  disetujui manusia.
 
 ---
 
-## 6. Arsitektur runtime (layanan)
+## F. Layanan yang berjalan (runtime)
 
-```mermaid
-flowchart TB
-    Web[web · Next.js :3000] -->|/api proxy| Api[api · FastAPI :8000]
-    Api --> PG[(PostgreSQL)]
-    Api --> MinIO[(MinIO<br/>berkas & bukti)]
-    Api -->|antre tugas| Redis[(Redis)]
-    Worker[worker · Celery] --> PG
-    Worker --> MinIO
-    Worker -.->|masking→| LLM[LLM eksternal<br/>OpenRouter/Anthropic/lokal]
-    Beat[beat · Celery] -->|jadwal scan_inbox| Redis
-    Redis --> Worker
-```
+Semua dikemas dalam satu `docker-compose.yml` dan berjalan **on-premise**:
 
-Semua dikemas dalam satu `docker-compose.yml` dan berjalan **on-premise**. Frontend
-mem-proxy `/api/*` ke backend (same-origin) sehingga hanya port 3000 yang perlu diekspos.
+- **web** (Next.js, :3000) — antarmuka; mem-proxy `/api/*` ke backend (same-origin).
+- **api** (FastAPI, :8000) — REST API.
+- **worker** (Celery) — proses latar: parsing, enrichment, naratif AI, auto-ingest.
+- **beat** (Celery) — penjadwal auto-ingest (R3).
+- **postgres** — basis data.
+- **redis** — antrean tugas untuk worker.
+- **minio** — penyimpanan berkas mentah & bukti.
+- **LLM eksternal** (OpenRouter/Anthropic/lokal) — dipanggil worker, hanya menerima data yang
+  sudah tersamar.
 
 ---
 
-## 7. Ringkasan
-
-AuditForge mengubah keluaran perkakas mentah menjadi laporan audit yang **deterministik,
-tertelusuri, dan diputuskan manusia** — dengan AI mempercepat penyusunan naratif tanpa
-pernah menggantikan penilaian auditor. Lihat `README.md` untuk cara menjalankan dan
-`DPPL_AuditForge.tex` / `DUPL_AuditForge.tex` untuk perancangan & kebutuhan rinci.
+Untuk cara menjalankan aplikasi lihat `README.md`; untuk perancangan & kebutuhan rinci lihat
+`DPPL_AuditForge.tex` dan `DUPL_AuditForge.tex`.
