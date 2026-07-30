@@ -21,6 +21,9 @@ next-env.d.ts
 datasets/raw/
 *.log
 
+# Artefak runtime Celery beat (status jadwal; regenerate saat beat jalan)
+celerybeat-schedule*
+
 # Artefak evaluasi ter-generate (dibuat oleh `python -m app.eval.run`)
 backend/eval_data/report.json
 
