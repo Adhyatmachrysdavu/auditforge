@@ -80,7 +80,10 @@ services:
     build: ./frontend
     env_file: [.env]
     environment:
-      NEXT_PUBLIC_API_BASE: http://localhost:8000
+      # Same-origin: klien memanggil /api/* → di-proxy Next (next.config.mjs) ke
+      # backend. Cukup satu tunnel (port 3000) untuk demo publik; tak perlu CORS.
+      NEXT_PUBLIC_API_BASE: /api
+      API_PROXY_TARGET: http://api:8000
       # Bind-mount Windows tak mengirim event inotify → pakai polling agar hot-reload jalan.
       WATCHPACK_POLLING: "true"
     ports: ["3000:3000"]
