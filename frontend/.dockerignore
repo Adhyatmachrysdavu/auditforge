@@ -1,0 +1,5 @@
+# Jangan ikutkan artefak lokal ke image (dibangun ulang di dalam container)
+node_modules/
+.next/
+.env
+npm-debug.log*

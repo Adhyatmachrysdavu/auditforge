@@ -1,0 +1,538 @@
+/* ===================================================================
+   AuditForge — Token & Chrome (Blueprint UI/UX Suryasoft)
+   Radius: tombol 8 / kartu 14 / search pill · satu tier shadow
+   Chrome (sidebar+topbar) navy di kedua mode · konten mengikuti tema
+   =================================================================== */
+
+:root {
+  --radius-button: 8px;
+  --radius-card: 14px;
+  --shadow-1: rgba(0, 0, 0, 0.04) 0 2px 6px, rgba(0, 0, 0, 0.1) 0 4px 8px;
+
+  /* Brand & status (standar blueprint) */
+  --primary: #1e5f9f;
+  --danger: #c8102e;
+  --success: #16a34a;
+  --warning: #d97706;
+
+  /* Chrome navy (dikecualikan dari dark mode) */
+  --navy-1: #0b2545;
+  --navy-2: #13315c;
+
+  /* Konten — terang */
+  --bg: #f8fafc;
+  --surface: #ffffff;
+  --surface-2: #f1f5f9;
+  --ink: #0f172a;
+  --ink-muted: #64748b;
+  --border: #e2e8f0;
+}
+
+:root[data-theme="dark"] {
+  /* Konten — gelap (token standar blueprint) */
+  --bg: #0f172a;
+  --surface: #1e293b;
+  --surface-2: #273449;
+  --ink: #e2e8f0;
+  --ink-muted: #94a3b8;
+  --border: #334155;
+}
+
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+body {
+  font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+}
+.mono {
+  font-family: var(--font-mono), ui-monospace, monospace;
+}
+.muted {
+  color: var(--ink-muted);
+}
+
+/* ---------- Tata letak shell ---------- */
+.app {
+  display: grid;
+  grid-template-columns: 248px 1fr;
+  min-height: 100vh;
+}
+
+/* ---------- Sidebar (navy) ---------- */
+.sidebar {
+  background: linear-gradient(180deg, var(--navy-1), var(--navy-2));
+  color: #cbd5e1;
+  padding: 18px 14px;
+  border-radius: 0 30px 0 0;
+}
+.brand {
+  color: #fff;
+  font-weight: 700;
+  font-size: 1.2rem;
+  letter-spacing: 0.3px;
+  margin: 4px 6px 22px;
+}
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.navitem {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: var(--radius-button);
+  color: #cbd5e1;
+  text-decoration: none;
+  font-size: 0.92rem;
+}
+.navitem:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+.navitem.active {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* ---------- Konten ---------- */
+.main {
+  padding: 14px 22px 40px;
+}
+.topbar {
+  background: var(--navy-1);
+  color: #fff;
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-1);
+  padding: 12px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 12px;
+  z-index: 20;
+}
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-1);
+  padding: 18px 20px;
+  margin-top: 18px;
+}
+
+/* ---------- Komponen dasar ---------- */
+.btn {
+  border-radius: var(--radius-button);
+  border: 1px solid transparent;
+  background: var(--primary);
+  color: #fff;
+  padding: 8px 14px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.btn.ghost {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.35);
+  color: #fff;
+}
+/* Tombol sekunder untuk kartu konten (kontras di latar terang & gelap). */
+.btn.secondary {
+  background: var(--surface-2);
+  border-color: var(--border);
+  color: var(--ink);
+}
+.btn.secondary:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.badge {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.badge.ok {
+  background: color-mix(in srgb, var(--success) 16%, transparent);
+  color: var(--success);
+}
+.badge.wait {
+  background: color-mix(in srgb, var(--warning) 16%, transparent);
+  color: var(--warning);
+}
+.badge.err {
+  background: color-mix(in srgb, var(--danger) 16%, transparent);
+  color: var(--danger);
+}
+
+/* ---------- Topbar actions ---------- */
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.topbar-user {
+  font-size: 0.8rem;
+  color: #cbd5e1;
+  margin-right: 4px;
+}
+
+/* ---------- Pesan layar penuh ---------- */
+.fullscreen-msg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  color: var(--ink-muted);
+}
+
+/* ---------- Halaman login ---------- */
+.auth-wrap {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--navy-1), var(--navy-2));
+  padding: 20px;
+}
+.auth-card {
+  width: 100%;
+  max-width: 380px;
+  background: var(--surface);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-1);
+  padding: 28px 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.auth-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--primary);
+}
+.auth-lang {
+  align-self: center;
+  margin-top: 2px;
+  border-color: var(--border);
+  color: var(--ink-muted);
+}
+
+/* ---------- Field / input ---------- */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.85rem;
+}
+.field > span {
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+input,
+select,
+textarea {
+  font: inherit;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-button);
+  background: var(--surface);
+  color: var(--ink);
+}
+textarea {
+  resize: vertical;
+  min-height: 60px;
+  width: 100%;
+}
+input:focus,
+select:focus,
+textarea:focus {
+  outline: 2px solid color-mix(in srgb, var(--primary) 40%, transparent);
+  outline-offset: 1px;
+  border-color: var(--primary);
+}
+
+/* ---------- Alert ---------- */
+.alert {
+  padding: 9px 12px;
+  border-radius: var(--radius-button);
+  font-size: 0.85rem;
+}
+.alert.err {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+}
+.alert.ok {
+  background: color-mix(in srgb, var(--success) 14%, transparent);
+  color: var(--success);
+}
+
+/* ---------- Stat cards ---------- */
+.stat-row {
+  display: flex;
+  gap: 14px;
+  margin-top: 18px;
+  flex-wrap: wrap;
+}
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-1);
+  padding: 16px 20px;
+  min-width: 140px;
+}
+.stat-num {
+  font-size: 1.9rem;
+  font-weight: 700;
+  color: var(--primary);
+  line-height: 1;
+}
+.stat-label {
+  color: var(--ink-muted);
+  font-size: 0.85rem;
+  margin-top: 6px;
+}
+
+/* ---------- Form baris ---------- */
+.form-row {
+  display: flex;
+  gap: 14px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+.form-row .field {
+  flex: 1 1 160px;
+}
+
+/* ---------- Tabel ---------- */
+.table-wrap {
+  overflow-x: auto;
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+.table th,
+.table td {
+  text-align: left;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.table th {
+  color: var(--ink-muted);
+  font-weight: 600;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.table tbody tr:hover {
+  background: var(--surface-2);
+}
+
+/* ---------- Baris chip ---------- */
+.chip-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+/* Chip filter (toggle) — palet terpusat, konsisten light/dark */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.chip:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.chip.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+/* ---------- Kartu metrik evaluasi (D17) ---------- */
+.metric-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+.metric {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+.metric-val {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--primary);
+  line-height: 1.1;
+}
+.metric-lbl {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--ink);
+  margin-top: 2px;
+}
+.metric-sub {
+  font-size: 0.74rem;
+  color: var(--ink-muted);
+  margin-top: 2px;
+}
+
+/* ---------- Navigasi tab workspace (D14) ---------- */
+.tabbar {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+}
+.tabitem {
+  padding: 9px 16px;
+  border: none;
+  background: transparent;
+  color: var(--ink-muted);
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.tabitem:hover {
+  color: var(--ink);
+}
+.tabitem.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+
+/* ---------- Papan Kanban temuan (D14) ---------- */
+.kanban {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(180px, 1fr);
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+}
+.kan-col {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px;
+  min-height: 80px;
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+.kan-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.82rem;
+}
+.kan-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  cursor: grab;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+.kan-card:active {
+  cursor: grabbing;
+}
+.kan-card:hover {
+  border-color: var(--primary);
+}
+
+/* ---------- Menu kustomisasi kolom (D11) ---------- */
+.col-menu {
+  position: relative;
+  display: inline-block;
+}
+/* `summary` bergaya seperti tombol sekunder; sembunyikan marker segitiga bawaan. */
+.col-menu > summary {
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.col-menu > summary::-webkit-details-marker {
+  display: none;
+}
+.col-menu-pop {
+  position: absolute;
+  inset-inline-end: 0;
+  margin-top: 6px;
+  z-index: 20;
+  min-width: 180px;
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+.col-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  cursor: pointer;
+  padding: 3px 4px;
+  border-radius: 6px;
+}
+.col-menu-item:hover {
+  background: var(--surface-2);
+}
+
+/* ---------- Link ---------- */
+.link {
+  color: var(--primary);
+  text-decoration: none;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.link:hover {
+  text-decoration: underline;
+}
+
+/* Tombol membungkus ikon + teks sejajar */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+}

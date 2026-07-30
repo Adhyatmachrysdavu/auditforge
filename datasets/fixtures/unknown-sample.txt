@@ -1,0 +1,2 @@
+Ini bukan keluaran perkakas apa pun — hanya teks biasa untuk menguji
+penanganan berkas yang tak dikenali oleh parser mana pun.

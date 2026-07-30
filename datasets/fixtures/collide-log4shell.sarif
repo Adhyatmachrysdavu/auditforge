@@ -1,0 +1,33 @@
+{
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "Semgrep",
+          "rules": [
+            {
+              "id": "insecure-deserialization",
+              "name": "Deserialization of Untrusted Data",
+              "properties": { "security-severity": "5.0", "tags": ["CWE-502"] }
+            }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "insecure-deserialization",
+          "level": "warning",
+          "message": { "text": "Unsafe object deserialization detected." },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "https://example.com/api/login" }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

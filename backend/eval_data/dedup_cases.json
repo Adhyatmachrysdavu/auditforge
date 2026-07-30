@@ -1,0 +1,68 @@
+{
+  "description": "Golden set presisi deduplikasi (D12). Setiap temuan mentah diberi label `gold_cluster` — kelompok temuan yang SEHARUSNYA tergabung. Harness menjalankan pipeline nyata (enrich → fingerprint) lalu membandingkan kelompok hasil vs label ini. Termasuk merge lintas-perkakas via CWE, merge via backfill CVE→CWE, dan pasangan near-duplicate yang HARUS tetap terpisah (endpoint beda).",
+  "cases": [
+    {
+      "gold_cluster": "log4shell",
+      "tool": "nuclei",
+      "title": "Apache Log4j2 Remote Code Execution (Log4Shell)",
+      "cwe": "CWE-502",
+      "target": "10.0.0.5:8080",
+      "severity": "critical"
+    },
+    {
+      "gold_cluster": "log4shell",
+      "tool": "sarif",
+      "title": "Deserialization of Untrusted Data",
+      "cwe": "CWE-502",
+      "target": "10.0.0.5:8080",
+      "severity": "high"
+    },
+    {
+      "gold_cluster": "log4shell",
+      "tool": "zap",
+      "title": "Remote Code Execution",
+      "target": "https://10.0.0.5:8080/",
+      "references": ["CVE-2021-44228"],
+      "severity": "high"
+    },
+    {
+      "gold_cluster": "xss_search",
+      "tool": "zap",
+      "title": "Cross Site Scripting (Reflected)",
+      "cwe": "CWE-79",
+      "target": "https://app.example.com/search",
+      "severity": "medium"
+    },
+    {
+      "gold_cluster": "xss_search",
+      "tool": "burp",
+      "title": "Reflected XSS",
+      "cwe": "CWE-79",
+      "target": "https://app.example.com/search?q=1#frag",
+      "severity": "high"
+    },
+    {
+      "gold_cluster": "xss_login",
+      "tool": "zap",
+      "title": "Cross Site Scripting (Reflected)",
+      "cwe": "CWE-79",
+      "target": "https://app.example.com/login",
+      "severity": "medium"
+    },
+    {
+      "gold_cluster": "sqli_api",
+      "tool": "nuclei",
+      "title": "SQL Injection",
+      "cwe": "CWE-89",
+      "target": "app.example.com/api/v1/users",
+      "severity": "high"
+    },
+    {
+      "gold_cluster": "tls_ver",
+      "tool": "nmap",
+      "title": "TLS Version Detection",
+      "target": "10.0.0.5:443",
+      "severity": "info"
+    }
+  ]
+}

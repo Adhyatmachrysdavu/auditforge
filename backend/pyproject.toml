@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "auditforge-backend"
+version = "0.1.0"
+description = "AuditForge backend — triase temuan & generator laporan audit berbasis AI"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+    "sqlalchemy>=2.0",
+    "psycopg[binary]>=3.2",
+    "alembic>=1.13",
+    "celery[redis]>=5.4",
+    "redis>=5.0",
+    "minio>=7.2",
+    "anthropic>=0.116",
+    "python-multipart>=0.0.9",
+    "bcrypt>=4.2",
+    "pyjwt>=2.9",
+    "cvss>=3.1",
+    "python-docx>=1.1",
+    "jinja2>=3.1",
+    "weasyprint>=62",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.11"]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+ignore_missing_imports = true

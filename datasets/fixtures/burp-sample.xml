@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<issues burpVersion="2023.10.3">
+  <issue>
+    <serialNumber>1001</serialNumber>
+    <name>SQL injection</name>
+    <host ip="192.0.2.10">http://target.example.com</host>
+    <path>/search</path>
+    <severity>High</severity>
+    <confidence>Certain</confidence>
+    <issueDetail>The <b>q</b> parameter appears to be vulnerable to SQL injection attacks.</issueDetail>
+    <vulnerabilityClassifications>CWE-89: Improper Neutralization of Special Elements used in an SQL Command</vulnerabilityClassifications>
+  </issue>
+  <issue>
+    <serialNumber>1002</serialNumber>
+    <name>Cookie without HttpOnly flag set</name>
+    <host ip="192.0.2.10">http://target.example.com</host>
+    <path>/</path>
+    <severity>Low</severity>
+    <confidence>Firm</confidence>
+    <issueDetail>A cookie was set without the <b>HttpOnly</b> flag.</issueDetail>
+    <vulnerabilityClassifications>CWE-1004: Sensitive Cookie Without 'HttpOnly' Flag</vulnerabilityClassifications>
+  </issue>
+</issues>

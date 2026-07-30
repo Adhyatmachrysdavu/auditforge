@@ -1,0 +1,4 @@
+inbox/*
+processed/*
+failed/*
+!*/.gitkeep

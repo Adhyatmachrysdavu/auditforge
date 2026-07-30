@@ -1,0 +1,51 @@
+{
+  "description": "Golden set akurasi pengayaan (D12): CWE→OWASP, CVSS vektor/CVE→skor+band severity, backfill CWE dari CVE. Harness menjalankan enrich() nyata dan mencocokkan tiap field `expected_*` yang diisi.",
+  "cases": [
+    {
+      "name": "Log4Shell via CVE (backfill CWE+CVSS)",
+      "references": ["CVE-2021-44228"],
+      "expected_cwe": "CWE-502",
+      "expected_owasp": "A08:2021 – Software and Data Integrity Failures",
+      "expected_score": 10.0,
+      "expected_severity": "critical"
+    },
+    {
+      "name": "Reflected XSS (CWE-79 → A03)",
+      "cwe": "CWE-79",
+      "expected_owasp": "A03:2021 – Injection"
+    },
+    {
+      "name": "Broken Access Control (CWE-284 → A01)",
+      "cwe": "CWE-284",
+      "expected_owasp": "A01:2021 – Broken Access Control"
+    },
+    {
+      "name": "Weak crypto (CWE-327 → A02)",
+      "cwe": "CWE-327",
+      "expected_owasp": "A02:2021 – Cryptographic Failures"
+    },
+    {
+      "name": "SSRF (CWE-918 → A10)",
+      "cwe": "CWE-918",
+      "expected_owasp": "A10:2021 – Server-Side Request Forgery (SSRF)"
+    },
+    {
+      "name": "CVSS vector high band (7.5)",
+      "references": ["CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N"],
+      "expected_score": 7.5,
+      "expected_severity": "high"
+    },
+    {
+      "name": "Heartbleed via CVE (backfill CWE+CVSS)",
+      "references": ["CVE-2014-0160"],
+      "expected_cwe": "CWE-125",
+      "expected_score": 7.5,
+      "expected_severity": "high"
+    },
+    {
+      "name": "Medium band from tool score (5.4)",
+      "cvss_score": 5.4,
+      "expected_severity": "medium"
+    }
+  ]
+}

@@ -1,0 +1,92 @@
+name: auditforge
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: auditforge
+      POSTGRES_PASSWORD: auditforge
+      POSTGRES_DB: auditforge
+    ports: ["5432:5432"]
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U auditforge"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: auditforge
+      MINIO_ROOT_PASSWORD: auditforge-secret
+    # Konsol MinIO dipetakan ke 9101 di host (9001 dipakai app lain, mis. Herd)
+    ports: ["9000:9000", "9101:9001"]
+    volumes: ["miniodata:/data"]
+
+  api:
+    build: ./backend
+    env_file: [.env]
+    environment:
+      DATABASE_URL: postgresql+psycopg://auditforge:auditforge@postgres:5432/auditforge
+      REDIS_URL: redis://redis:6379/0
+      MINIO_ENDPOINT: minio:9000
+    ports: ["8000:8000"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      minio: { condition: service_started }
+    volumes: ["./backend:/app"]
+
+  worker:
+    build: ./backend
+    command: celery -A app.workers.celery_app.celery_app worker --loglevel=info
+    env_file: [.env]
+    environment:
+      DATABASE_URL: postgresql+psycopg://auditforge:auditforge@postgres:5432/auditforge
+      REDIS_URL: redis://redis:6379/0
+      MINIO_ENDPOINT: minio:9000
+      WATCH_DIR: /watch
+    depends_on:
+      redis: { condition: service_healthy }
+    # Folder terpantau auto-ingest (R3): taruh berkas di ./datasets/watch/inbox/<engagement_id>/
+    volumes: ["./backend:/app", "./datasets/watch:/watch"]
+
+  # Penjadwal Celery (R3): memicu scan_inbox berkala; worker yang mengeksekusi.
+  beat:
+    build: ./backend
+    command: celery -A app.workers.celery_app.celery_app beat --loglevel=info
+    env_file: [.env]
+    environment:
+      DATABASE_URL: postgresql+psycopg://auditforge:auditforge@postgres:5432/auditforge
+      REDIS_URL: redis://redis:6379/0
+      MINIO_ENDPOINT: minio:9000
+      WATCH_DIR: /watch
+    depends_on:
+      redis: { condition: service_healthy }
+    volumes: ["./backend:/app"]
+
+  web:
+    build: ./frontend
+    env_file: [.env]
+    environment:
+      NEXT_PUBLIC_API_BASE: http://localhost:8000
+      # Bind-mount Windows tak mengirim event inotify → pakai polling agar hot-reload jalan.
+      WATCHPACK_POLLING: "true"
+    ports: ["3000:3000"]
+    depends_on: [api]
+    volumes: ["./frontend:/app", "/app/node_modules"]
+
+volumes:
+  pgdata:
+  miniodata:

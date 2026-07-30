@@ -1,0 +1,36 @@
+{
+  "description": "Golden set naratif (D12, §6.4). ISI oleh auditor Suryasoft: ~10–15 naratif temuan versi mereka sebagai pembanding mutu draf AI. Skor offline = overlap token + kelengkapan struktur; skor semantik penuh menyusul. Contoh di bawah hanya benih agar scorer berjalan.",
+  "lang": "id",
+  "cases": [
+    {
+      "finding": {
+        "title": "Reflected Cross-Site Scripting",
+        "severity": "high",
+        "cwe": "CWE-79",
+        "owasp": "A03:2021 – Injection",
+        "cvss_score": 7.4,
+        "cve": []
+      },
+      "reference": {
+        "description": "Aplikasi menampilkan kembali masukan pengguna pada parameter pencarian tanpa penyaringan atau enkode keluaran yang memadai, sehingga skrip yang disuntikkan penyerang dieksekusi di peramban korban.",
+        "impact": "Penyerang dapat mencuri token sesi, melakukan tindakan atas nama korban, atau mengubah tampilan halaman, yang mengancam kerahasiaan dan integritas data pengguna.",
+        "recommendation": "Terapkan enkode keluaran sesuai konteks (HTML/atribut/JS), validasi masukan pada sisi server, dan pasang Content-Security-Policy yang ketat."
+      }
+    },
+    {
+      "finding": {
+        "title": "Apache Log4j2 Remote Code Execution (Log4Shell)",
+        "severity": "critical",
+        "cwe": "CWE-502",
+        "owasp": "A08:2021 – Software and Data Integrity Failures",
+        "cvss_score": 10.0,
+        "cve": ["CVE-2021-44228"]
+      },
+      "reference": {
+        "description": "Komponen Log4j2 yang rentan memproses string pencarian JNDI dari data tak tepercaya, memungkinkan penyerang memuat dan mengeksekusi kelas Java jarak jauh (CVE-2021-44228).",
+        "impact": "Eksekusi kode jarak jauh tanpa autentikasi memberi penyerang kendali penuh atas server, berpotensi menyebabkan kebocoran data masif dan pergerakan lateral ke sistem lain.",
+        "recommendation": "Perbarui Log4j2 ke versi tertambal (≥ 2.17.1), hapus kelas JndiLookup bila tidak bisa memutakhirkan, dan batasi akses jaringan keluar dari server terdampak."
+      }
+    }
+  ]
+}

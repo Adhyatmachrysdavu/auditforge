@@ -1,0 +1,39 @@
+{
+  "@version": "2.14.0",
+  "@generated": "Mon, 27 Jul 2026 08:00:00",
+  "site": [
+    {
+      "@name": "http://example.com",
+      "@host": "example.com",
+      "@port": "80",
+      "alerts": [
+        {
+          "pluginid": "10202",
+          "alertRef": "10202",
+          "alert": "Absence of Anti-CSRF Tokens",
+          "name": "Absence of Anti-CSRF Tokens",
+          "riskcode": "1",
+          "riskdesc": "Low (Medium)",
+          "desc": "<p>No Anti-CSRF tokens were found in a HTML submission form.</p>",
+          "cweid": "352",
+          "solution": "<p>Gunakan token anti-CSRF pada setiap form.</p>",
+          "reference": "<p>https://owasp.org/www-community/attacks/csrf</p>",
+          "instances": [{ "uri": "http://example.com/login", "method": "GET" }]
+        },
+        {
+          "pluginid": "40012",
+          "alertRef": "40012",
+          "alert": "Cross Site Scripting (Reflected)",
+          "name": "Cross Site Scripting (Reflected)",
+          "riskcode": "3",
+          "riskdesc": "High (Medium)",
+          "desc": "<p>Cross-site Scripting (XSS) terpantul pada parameter pencarian.</p>",
+          "cweid": "79",
+          "solution": "<p>Validasi masukan dan enkode keluaran.</p>",
+          "reference": "<p>https://owasp.org/www-community/attacks/xss/</p>",
+          "instances": [{ "uri": "http://example.com/search?q=test", "method": "GET" }]
+        }
+      ]
+    }
+  ]
+}

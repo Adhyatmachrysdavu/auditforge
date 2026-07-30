@@ -1,0 +1,10 @@
+# Jangan ikutkan artefak lokal ke image (dibangun ulang di dalam container)
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.env

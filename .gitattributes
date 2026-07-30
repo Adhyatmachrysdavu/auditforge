@@ -1,0 +1,8 @@
+# Normalisasi akhir-baris: simpan LF di repo, checkout sesuai OS.
+* text=auto eol=lf
+
+# Berkas biner (jangan diutak-atik).
+*.png binary
+*.jpg binary
+*.pdf binary
+*.docx binary

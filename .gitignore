@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Node / Next
+node_modules/
+.next/
+next-env.d.ts
+
+# Data (regenerate via datasets scripts)
+datasets/raw/
+*.log
+
+# Artefak evaluasi ter-generate (dibuat oleh `python -m app.eval.run`)
+backend/eval_data/report.json
+
+# Folder terpantau auto-ingest (R3) — isi runtime, jangan commit
+datasets/watch/inbox/
+datasets/watch/processed/
+datasets/watch/failed/
+
+# OS/editor
+.DS_Store
+Thumbs.db
