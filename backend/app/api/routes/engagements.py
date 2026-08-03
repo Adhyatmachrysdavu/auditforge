@@ -13,6 +13,7 @@ from app.api.deps import get_current_user, require_roles
 from app.core.storage import get_bytes, put_bytes, remove_object
 from app.db.session import get_db
 from app.eval.engagement_eval import evaluate_engagement
+from app.eval.timing import timing_summary
 from app.models.engagement import Engagement
 from app.models.enums import ScanTool
 from app.models.finding import Finding, FindingAttachment, FindingRevision
@@ -26,6 +27,7 @@ from app.reporting.report_data import ReportData, build_report_data
 from app.review import can_transition, is_valid_status, role_allows_transition
 from app.schemas.engagement import (
     AttachmentOut,
+    BaselineIn,
     EngagementCreate,
     EngagementDetailOut,
     EngagementOut,
@@ -106,6 +108,8 @@ def get_engagement(
         exec_summary_model=e.exec_summary_model,
         exec_summary_prompt_version=e.exec_summary_prompt_version,
         exec_summary=e.exec_summary,
+        baseline_hours=e.baseline_hours,
+        baseline_note=e.baseline_note,
     )
 
 
@@ -648,6 +652,45 @@ def engagement_evaluation(
         select(Finding).where(Finding.engagement_id == engagement_id)
     ).all()
     return evaluate_engagement(list(rows))
+
+
+@router.get("/{engagement_id}/timing")
+def engagement_timing(
+    engagement_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> dict:
+    """Metrik waktu penyusunan laporan (Modul 1) dari jejak revisi temuan."""
+    eng = _get_engagement(db, engagement_id)
+    rows = db.scalars(
+        select(FindingRevision)
+        .join(Finding, FindingRevision.finding_id == Finding.id)
+        .where(Finding.engagement_id == engagement_id)
+        .order_by(FindingRevision.created_at)
+    ).all()
+    return timing_summary(list(rows), baseline_hours=eng.baseline_hours)
+
+
+@router.put("/{engagement_id}/baseline")
+def set_engagement_baseline(
+    engagement_id: int,
+    payload: BaselineIn,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles("auditor", "admin")),
+) -> dict:
+    """Isi angka pembanding waktu penyusunan manual (Modul 1).
+
+    Hanya auditor/admin: angka ini menjadi dasar klaim penghematan pada laporan
+    evaluasi, sehingga bukan pekerjaan analisis harian.
+    """
+    eng = _get_engagement(db, engagement_id)
+    eng.baseline_hours = payload.baseline_hours
+    eng.baseline_note = payload.baseline_note
+    db.commit()
+    return {
+        "baseline_hours": eng.baseline_hours,
+        "baseline_note": eng.baseline_note,
+    }
 
 
 @router.get("/{engagement_id}/report.docx")
