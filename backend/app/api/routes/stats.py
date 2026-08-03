@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.db.session import get_db
-from app.eval.timing import timing_summary
+from app.eval.timing import aggregate_timing, timing_summary
 from app.models.engagement import Engagement
 from app.models.enums import Severity
 from app.models.finding import Finding, FindingRevision
@@ -52,9 +52,14 @@ def timing_overview(
 
     Seluruh revisi diambil dalam satu kueri lalu dikelompokkan di memori, agar
     tidak memicu satu kueri per penugasan.
+
+    TODO(Modul 2): saring daftar penugasan berdasarkan keanggotaan tim pengguna
+    saat manajemen tim dikerjakan — saat ini setiap pengguna terautentikasi
+    melihat agregat seluruh penugasan.
     """
     rows = db.execute(
         select(Finding.engagement_id, FindingRevision.action, FindingRevision.created_at)
+        .select_from(FindingRevision)
         .join(Finding, FindingRevision.finding_id == Finding.id)
         .order_by(FindingRevision.created_at)
     ).all()
@@ -78,14 +83,4 @@ def timing_overview(
             }
         )
 
-    measured = [i for i in items if i["saved_ratio"] is not None]
-    avg = (
-        round(sum(float(i["saved_ratio"]) for i in measured) / len(measured), 4)
-        if measured
-        else None
-    )
-    return {
-        "items": items,
-        "engagements_measured": len(measured),
-        "avg_saved_ratio": avg,
-    }
+    return {"items": items, **aggregate_timing(items)}

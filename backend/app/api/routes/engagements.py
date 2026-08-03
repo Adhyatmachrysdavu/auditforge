@@ -4,6 +4,7 @@ from __future__ import annotations
 import base64
 import uuid
 from datetime import UTC, datetime
+from types import SimpleNamespace
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, status
 from sqlalchemy import func, select
@@ -662,13 +663,17 @@ def engagement_timing(
 ) -> dict:
     """Metrik waktu penyusunan laporan (Modul 1) dari jejak revisi temuan."""
     eng = _get_engagement(db, engagement_id)
-    rows = db.scalars(
-        select(FindingRevision)
+    # Hanya dua kolom yang dipakai; menarik baris ORM utuh ikut membawa blob
+    # JSON `narrative` tiap revisi tanpa alasan.
+    rows = db.execute(
+        select(FindingRevision.action, FindingRevision.created_at)
+        .select_from(FindingRevision)
         .join(Finding, FindingRevision.finding_id == Finding.id)
         .where(Finding.engagement_id == engagement_id)
         .order_by(FindingRevision.created_at)
     ).all()
-    return timing_summary(list(rows), baseline_hours=eng.baseline_hours)
+    events = [SimpleNamespace(action=a, created_at=c) for a, c in rows]
+    return timing_summary(events, baseline_hours=eng.baseline_hours)
 
 
 @router.put("/{engagement_id}/baseline")
