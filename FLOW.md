@@ -15,67 +15,77 @@ tahap **pascapengujian**; ia tidak memindai atau mengeksploitasi sistem apa pun.
 
 ## A. Alur utama: dari keluaran perkakas sampai laporan
 
-Urutannya seperti ini:
+Tiap langkah disertai **Buka:** — menu/tab yang perlu dibuka di aplikasi (mulai dari
+`http://localhost:3000`, setelah login).
+
+**0. Masuk.**
+→ **Buka:** halaman **Login** → isi email + kata sandi → **Masuk**.
+Untuk mencoba semua fitur, pakai akun **admin**.
 
 **1. Buat penugasan.**
-Analis membuat sebuah penugasan (proyek audit) sebagai wadah untuk satu klien — berisi
-seluruh berkas, temuan, dan laporan.
+Analis membuat sebuah penugasan (proyek audit) sebagai wadah untuk satu klien.
+→ **Buka:** sidebar **Penugasan** → isi form **"Buat Penugasan Baru"** (nama + klien) → **Buat**.
+Penugasan baru muncul di **Daftar Penugasan**.
 
 **2. Masukkan berkas keluaran perkakas.**
-Analis mengunggah berkas hasil pemindaian (Nuclei, ZAP, Nmap, Burp, atau SARIF) lewat UI.
-Berkas mentah disimpan ke MinIO, dan dibuat catatan `ScanUpload`. *(Alternatif tanpa unggah
-manual: taruh berkas di folder terpantau — lihat bagian D.)*
+Analis mengunggah berkas hasil pemindaian (Nuclei, ZAP, Nmap, Burp, atau SARIF). Berkas mentah
+disimpan ke MinIO dan dicatat sebagai `ScanUpload`.
+→ **Buka:** di Daftar Penugasan klik **Buka** pada penugasan → tab **Berkas** → **"Unggah
+Berkas Scan"** (pilih berkas, perkakas boleh dibiarkan auto) → **Unggah**.
+*(Alternatif tanpa unggah manual: taruh berkas di folder terpantau — lihat bagian D.)*
 
 **3. Uraikan berkas menjadi temuan.**
-Sistem mengenali jenis perkakas secara otomatis (`sniff`), lalu parser mengubah isi berkas
-menjadi **temuan** dalam satu skema terpadu. Proses ini berjalan di latar (Celery) sehingga
-UI tetap responsif. Berkas yang gagal diurai ditandai `failed` tanpa mengganggu berkas lain.
+Sistem mengenali jenis perkakas otomatis (`sniff`), lalu parser mengubah isi berkas menjadi
+**temuan** terpadu. Berjalan di latar (Celery). Berkas gagal ditandai `failed` tanpa
+mengganggu yang lain.
+→ **Buka:** tab **Berkas** — pantau kolom **Status** tiap berkas (`parsed` / `failed`).
 
 **4. Normalisasi keparahan.**
-Tingkat keparahan dari berbagai perkakas (yang formatnya beda-beda) disatukan ke satu skala
-baku: critical / high / medium / low / info.
+Keparahan dari berbagai perkakas disatukan ke satu skala: critical / high / medium / low / info.
+*(Otomatis di latar.)*
+→ **Buka:** tab **Temuan** — lihat kolom **Keparahan** (warna + ikon + teks).
 
 **5. Pengayaan (enrichment).**
-Tiap temuan dipetakan ke **CWE** dan **OWASP Top 10**, dihitung **skor CVSS v3.1**, dan
-ditautkan ke **CVE** bila ada. Bila CVE dikenal, CWE/skor yang kurang bisa di-backfill.
+Tiap temuan dipetakan ke **CWE** & **OWASP Top 10**, dihitung **skor CVSS v3.1**, dan ditautkan
+ke **CVE** bila ada. *(Otomatis.)*
+→ **Buka:** tab **Temuan** — lihat kolom **CWE / OWASP / CVSS / CVE**.
 
 **6. Deduplikasi.**
-Sistem membuat sidik jari (fingerprint) tiap temuan, lalu **menggabungkan temuan yang sama**
-— baik dari berkas berbeda maupun perkakas berbeda. Yang digabung mencatat semua asalnya dan
-menaikkan hitungan kemunculan; keparahan/CVSS tertinggi yang menang.
+Sistem membuat sidik jari tiap temuan, lalu **menggabungkan temuan yang sama** (lintas berkas
+& perkakas); yang digabung mencatat asalnya dan menaikkan hitungan. *(Otomatis.)*
+→ **Buka:** tab **Temuan** — lihat kolom **Sumber** (perkakas asal) & **Jumlah** (×N).
 
 **7. Triase prioritas.**
-Sistem menghitung prioritas **P1–P4** secara deterministik dari keparahan + skor CVSS +
-jumlah kemunculan + ada/tidaknya CVE. Ini membantu auditor tahu mana yang harus ditangani
-duluan.
+Sistem menghitung prioritas **P1–P4** dari keparahan + CVSS + kemunculan + CVE.
+→ **Buka:** tab **Temuan** — kolom **Prioritas** (P1–P4). Tombol **"Hitung Ulang Triase"** untuk
+menghitung ulang.
 
 **8. Susun draf naratif dengan AI (opsional, tapi umum).**
-Untuk temuan terpilih, sistem:
-   - **menyamarkan data sensitif** dulu (IP internal, hostname, kredensial, email) →
-     jadi `[IP-INTERNAL-1]`, `[SECRET-1]`, dst;
-   - mengirim permintaan terstruktur ke LLM → LLM mengembalikan **draf**
-     deskripsi, dampak, langkah reproduksi, dan remediasi;
-   - **memulihkan** data yang disamarkan pada hasilnya, menyimpannya sebagai draf, dan
-     **menandainya "buatan AI"** beserta model + versi prompt.
-
-   Sistem juga bisa membuat **ringkasan eksekutif** per penugasan dengan cara serupa. Bila AI
-   tidak dipakai, auditor menulis naratif manual.
+Sistem menyamarkan data sensitif → LLM menyusun **draf** (deskripsi/dampak/reproduksi/remediasi)
+→ data dipulihkan & ditandai **"buatan AI"** + model/versi prompt.
+→ **Buka:** tab **Temuan** → tombol **"Buat Naratif AI"** (batch), lalu klik **✨ Lihat** pada
+kolom Naratif tiap temuan. Untuk **ringkasan eksekutif**: tab **Ringkasan** → **"Buat Ringkasan
+Eksekutif"**.
 
 **9. Tinjau & setujui (auditor).**
-Auditor membuka tiap temuan, membaca naratif (bagian buatan AI ditandai jelas), **menyunting
-bila perlu**, mengonfirmasi/menolak kandidat positif palsu, lalu menetapkan status:
-**disetujui**, **ditolak**, atau **positif palsu**. Setiap suntingan & perubahan status
-tercatat di riwayat versi. Bukti (tangkapan layar) bisa dilampirkan di sini.
+Auditor membaca naratif (bagian AI ditandai), **menyunting bila perlu**, mengonfirmasi/menolak
+positif palsu, lalu menetapkan status. Bukti bisa dilampirkan.
+→ **Buka:** tab **Temuan** → klik **badge status** (atau kartu di mode Kanban) sebuah temuan →
+panel review: **Sunting** naratif, **Setujui / Tolak / Tandai False Positive**, **Lampiran
+Bukti**, **Riwayat**.
 
 **10. Terbitkan laporan.**
-Sistem merakit laporan **hanya dari temuan yang disetujui** (naratif final auditor menang
-atas draf AI), lengkap dengan kop surat, ringkasan eksekutif, grafik (distribusi keparahan +
-matriks risiko), dan bukti. Laporan diunduh sebagai **DOCX** atau **PDF**, atau dipratinjau
-sebagai HTML.
+Sistem merakit laporan **hanya dari temuan disetujui** (naratif final auditor menang atas draf
+AI) + kop surat, grafik, dan bukti.
+→ **Buka:** tab **Ringkasan** → **Pratinjau** (HTML), **Unduh DOCX**, atau **Unduh PDF**.
+Branding kop diatur di **Administrasi** → **Branding Laporan**.
 
 **11. Evaluasi.**
-Tab Ringkasan menampilkan metrik terukur: efisiensi dedup, cakupan draf AI, kemajuan review,
-dan rasio suntingan auditor — untuk mengukur nilai yang diberikan sistem.
+Metrik terukur nilai sistem: efisiensi dedup, cakupan draf AI, kemajuan review, rasio suntingan.
+→ **Buka:** tab **Ringkasan** — **kartu metrik** di bagian atas.
+
+> **Fitur admin** (di luar alur utama) → **Buka:** sidebar **Administrasi** → **Konfigurasi LLM**
+> (Base URL/key/model), **Branding Laporan**, **Pratinjau Masking**, **Jejak Audit**.
 
 ---
 
