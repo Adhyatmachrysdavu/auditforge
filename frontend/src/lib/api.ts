@@ -353,6 +353,46 @@ export interface Evaluation {
 export const getEvaluation = (id: number) =>
   req<Evaluation>(`/engagements/${id}/evaluation`);
 
+// ---------- Modul 1: metrik waktu penyusunan ----------
+export interface Timing {
+  event_count: number;
+  first_at: string | null;
+  last_at: string | null;
+  calendar_seconds: number;
+  active_seconds: number;
+  active_hours: number;
+  events_by_action: Record<string, number>;
+  baseline_hours: number | null;
+  saved_hours: number | null;
+  saved_ratio: number | null;
+}
+export interface TimingRow extends Timing {
+  engagement_id: number;
+  name: string;
+  client_name: string;
+  status: string;
+}
+export interface TimingOverview {
+  items: TimingRow[];
+  engagements_measured: number;
+  avg_saved_ratio: number | null;
+}
+export const getTiming = (id: number) => req<Timing>(`/engagements/${id}/timing`);
+export const getTimingOverview = () => req<TimingOverview>("/stats/timing");
+export const setBaseline = (
+  id: number,
+  baseline_hours: number | null,
+  baseline_note: string | null
+) =>
+  req<{ baseline_hours: number | null; baseline_note: string | null }>(
+    `/engagements/${id}/baseline`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ baseline_hours, baseline_note }),
+    }
+  );
+
 // ---------- D17: transparansi masking + audit log (admin) ----------
 export const previewMasking = (text: string) =>
   req<{ masked: string }>("/admin/masking-preview", {
