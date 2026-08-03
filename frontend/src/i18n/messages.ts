@@ -178,6 +178,28 @@ export const messages = {
     "reports.noBaseline": "belum diisi",
     "reports.empty": "Belum ada penugasan.",
     "reports.hours": "jam",
+    "reports.loading": "Memuat data waktu penyusunan…",
+    "reports.loadFailed": "Gagal memuat data waktu penyusunan.",
+    "reports.notMeasurable": "belum terukur",
+    "reports.measuredHint":
+      "Hanya penugasan dengan minimal dua jejak revisi dan baseline terisi yang dihitung.",
+
+    "base.title": "Baseline Waktu Penyusunan Manual",
+    "base.desc":
+      "Perkiraan jam yang dibutuhkan untuk menyusun laporan ini secara manual. Angka ini menjadi pembanding klaim penghematan waktu.",
+    "base.hours": "Baseline (jam)",
+    "base.note": "Catatan sumber angka",
+    "base.notePlaceholder": "mis. rata-rata 3 laporan sebelumnya",
+    "base.save": "Simpan Baseline",
+    "base.saved": "Baseline tersimpan.",
+    "base.forbidden": "Hanya auditor atau admin yang boleh mengisi baseline.",
+    "base.invalid": "Baseline harus berupa angka lebih besar dari 0, atau dikosongkan.",
+    "base.activeTime": "Waktu aktif tercatat",
+    "base.saved_hours": "Hemat",
+    "base.savedRatio": "Penghematan",
+    "base.events": "Jejak revisi",
+    "base.notMeasurable":
+      "Belum terukur: dibutuhkan minimal dua jejak revisi sebelum penghematan dapat diklaim.",
     "brand.title": "Branding Laporan (Letterhead)",
     "brand.desc":
       "Nama organisasi, judul laporan, dan warna aksen yang muncul di kop laporan DOCX.",
@@ -388,6 +410,28 @@ export const messages = {
     "reports.noBaseline": "not set",
     "reports.empty": "No engagements yet.",
     "reports.hours": "h",
+    "reports.loading": "Loading report preparation time…",
+    "reports.loadFailed": "Failed to load report preparation time.",
+    "reports.notMeasurable": "not measurable",
+    "reports.measuredHint":
+      "Only engagements with at least two revision events and a baseline are counted.",
+
+    "base.title": "Manual Report Preparation Baseline",
+    "base.desc":
+      "Estimated hours needed to prepare this report manually. This number is the comparison basis for the time-saving claim.",
+    "base.hours": "Baseline (hours)",
+    "base.note": "Where the number comes from",
+    "base.notePlaceholder": "e.g. average of the 3 previous reports",
+    "base.save": "Save Baseline",
+    "base.saved": "Baseline saved.",
+    "base.forbidden": "Only an auditor or admin may set the baseline.",
+    "base.invalid": "Baseline must be a number greater than 0, or left empty.",
+    "base.activeTime": "Recorded active time",
+    "base.saved_hours": "Saved",
+    "base.savedRatio": "Time saved",
+    "base.events": "Revision events",
+    "base.notMeasurable":
+      "Not measurable yet: at least two revision events are required before any saving can be claimed.",
     "brand.title": "Report Branding (Letterhead)",
     "brand.desc":
       "Organization name, report title, and accent color shown on the DOCX letterhead.",

@@ -12,18 +12,34 @@ function pct(v: number | null): string {
 }
 
 export default function ReportsPage() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [data, setData] = useState<api.TimingOverview | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     api
       .getTimingOverview()
-      .then(setData)
-      .catch((err) => setError(err instanceof ApiError ? err.message : String(err)));
+      .then((d) => {
+        setData(d);
+        setError(null);
+      })
+      .catch((err) =>
+        setError(err instanceof ApiError ? err.message : String(err))
+      )
+      .finally(() => setLoading(false));
   }, []);
 
+  // Galat aksi tombol laporan ditampilkan terpisah dari galat pemuatan tabel,
+  // agar kegagalan unduh tidak terbaca sebagai kegagalan memuat data.
+  const [actionError, setActionError] = useState<string | null>(null);
+  const onActionError = (err: unknown) =>
+    setActionError(err instanceof ApiError ? err.message : String(err));
+
   const items = data?.items ?? [];
+  // `data === null` berarti fetch gagal — itu bukan hal yang sama dengan
+  // "memang belum ada penugasan", jadi keduanya tidak boleh tampil sama.
+  const loadFailed = !loading && data === null;
 
   return (
     <AppShell title={t("nav.reports")}>
@@ -43,11 +59,19 @@ export default function ReportsPage() {
             <strong className="mono">{items.length}</strong>
           </div>
         </div>
+        <p className="muted" style={{ fontSize: "0.78rem", marginBottom: 0 }}>
+          {t("reports.measuredHint")}
+        </p>
         {error && <div className="alert err">{error}</div>}
+        {actionError && <div className="alert err">{actionError}</div>}
       </section>
 
       <section className="card">
-        {items.length === 0 ? (
+        {loading ? (
+          <p className="muted">{t("reports.loading")}</p>
+        ) : loadFailed ? (
+          <p className="muted">{t("reports.loadFailed")}</p>
+        ) : items.length === 0 ? (
           <p className="muted">{t("reports.empty")}</p>
         ) : (
           <div className="table-wrap">
@@ -79,23 +103,41 @@ export default function ReportsPage() {
                         `${r.baseline_hours} ${t("reports.hours")}`
                       )}
                     </td>
-                    <td className="mono">{pct(r.saved_ratio)}</td>
+                    <td className="mono">
+                      {r.measurable ? (
+                        pct(r.saved_ratio)
+                      ) : (
+                        <span className="muted">{t("reports.notMeasurable")}</span>
+                      )}
+                    </td>
                     <td>
                       <button
                         className="btn ghost"
-                        onClick={() => api.previewReport(r.engagement_id)}
+                        onClick={() =>
+                          api
+                            .previewReport(r.engagement_id, "approved", locale)
+                            .catch(onActionError)
+                        }
                       >
                         <Eye size={14} /> {t("report.preview")}
                       </button>{" "}
                       <button
                         className="btn ghost"
-                        onClick={() => api.downloadReportDocx(r.engagement_id)}
+                        onClick={() =>
+                          api
+                            .downloadReportDocx(r.engagement_id, "approved", locale)
+                            .catch(onActionError)
+                        }
                       >
                         <FileDoc size={14} /> DOCX
                       </button>{" "}
                       <button
                         className="btn ghost"
-                        onClick={() => api.downloadReportPdf(r.engagement_id)}
+                        onClick={() =>
+                          api
+                            .downloadReportPdf(r.engagement_id, "approved", locale)
+                            .catch(onActionError)
+                        }
                       >
                         <FilePdf size={14} /> PDF
                       </button>

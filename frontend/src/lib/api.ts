@@ -78,6 +78,8 @@ export interface EngagementDetail extends Engagement {
   exec_summary_model: string | null;
   exec_summary_prompt_version: string | null;
   exec_summary: ExecSummary | null;
+  baseline_hours: number | null;
+  baseline_note: string | null;
 }
 export interface ScanUpload {
   id: number;
@@ -362,6 +364,8 @@ export interface Timing {
   active_seconds: number;
   active_hours: number;
   events_by_action: Record<string, number>;
+  /** false bila jejak revisi kurang dari dua stempel waktu — tak ada yang bisa dihitung. */
+  measurable: boolean;
   baseline_hours: number | null;
   saved_hours: number | null;
   saved_ratio: number | null;

@@ -110,6 +110,13 @@ export default function EngagementDetailPage() {
   const [atts, setAtts] = useState<api.Attachment[]>([]);
   const [attBusy, setAttBusy] = useState(false);
   const [evalM, setEvalM] = useState<api.Evaluation | null>(null);
+  // --- Modul 1: baseline + metrik waktu penyusunan ---
+  const [timing, setTiming] = useState<api.Timing | null>(null);
+  const [baseHours, setBaseHours] = useState("");
+  const [baseNote, setBaseNote] = useState("");
+  const [baseBusy, setBaseBusy] = useState(false);
+  const [baseMsg, setBaseMsg] = useState<string | null>(null);
+  const [baseErr, setBaseErr] = useState<string | null>(null);
   // Deteksi macet polling naratif (mis. batas kuota LLM): tak ada progres → berhenti.
   const stallRef = useRef({ last: -1, stall: 0 });
 
@@ -126,21 +133,59 @@ export default function EngagementDetailPage() {
   };
 
   const refresh = useCallback(async () => {
-    const [e, u, f, ev] = await Promise.all([
+    const [e, u, f, ev, tm] = await Promise.all([
       api.getEngagement(id),
       api.listUploads(id),
       api.listFindings(id),
       api.getEvaluation(id).catch(() => null),
+      api.getTiming(id).catch(() => null),
     ]);
     setEng(e);
     setUploads(u);
     setFindings(f);
     if (ev) setEvalM(ev);
+    if (tm) setTiming(tm);
   }, [id]);
 
   useEffect(() => {
     refresh().catch(() => {});
   }, [refresh]);
+
+  // Isi formulir baseline sekali saat penugasan termuat; dikunci pada `eng?.id`
+  // agar refresh berkala tidak menimpa yang sedang diketik auditor.
+  useEffect(() => {
+    if (!eng) return;
+    setBaseHours(eng.baseline_hours === null ? "" : String(eng.baseline_hours));
+    setBaseNote(eng.baseline_note ?? "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eng?.id]);
+
+  async function saveBaseline() {
+    setBaseMsg(null);
+    setBaseErr(null);
+    const raw = baseHours.trim();
+    let hours: number | null = null;
+    if (raw !== "") {
+      const n = Number(raw);
+      if (!Number.isFinite(n) || n <= 0) {
+        setBaseErr(t("base.invalid"));
+        return;
+      }
+      hours = n;
+    }
+    setBaseBusy(true);
+    try {
+      await api.setBaseline(id, hours, baseNote.trim() || null);
+      setBaseMsg(t("base.saved"));
+      await refresh();
+    } catch (err) {
+      // Backend menolak peran non-auditor dengan 403; pesan generik tak menjelaskan apa pun.
+      if (err instanceof ApiError && err.status === 403) setBaseErr(t("base.forbidden"));
+      else setBaseErr(err instanceof ApiError ? err.message : String(err));
+    } finally {
+      setBaseBusy(false);
+    }
+  }
 
   // Polling selama masih ada berkas yang diproses.
   useEffect(() => {
@@ -1154,6 +1199,84 @@ export default function EngagementDetailPage() {
             </div>
           </div>
         )}
+        <div className="card" style={{ marginTop: 14 }}>
+          <h4 style={{ margin: "0 0 4px" }}>{t("base.title")}</h4>
+          <p className="muted" style={{ marginTop: 0, fontSize: "0.8rem" }}>
+            {t("base.desc")}
+          </p>
+          <div className="form-row">
+            <label className="field">
+              <span>{t("base.hours")}</span>
+              <input
+                type="number"
+                min="0"
+                step="0.25"
+                value={baseHours}
+                onChange={(e) => setBaseHours(e.target.value)}
+                disabled={!canApprove || baseBusy}
+              />
+            </label>
+            <label className="field" style={{ flex: 2 }}>
+              <span>{t("base.note")}</span>
+              <input
+                type="text"
+                value={baseNote}
+                placeholder={t("base.notePlaceholder")}
+                onChange={(e) => setBaseNote(e.target.value)}
+                disabled={!canApprove || baseBusy}
+              />
+            </label>
+            <button
+              className="btn"
+              onClick={saveBaseline}
+              disabled={!canApprove || baseBusy}
+              title={canApprove ? undefined : t("base.forbidden")}
+            >
+              {baseBusy ? t("common.loading") : t("base.save")}
+            </button>
+          </div>
+          {!canApprove && <p className="muted">{t("base.forbidden")}</p>}
+          {baseMsg && <div className="alert ok">{baseMsg}</div>}
+          {baseErr && <div className="alert err">{baseErr}</div>}
+          {timing && (
+            <>
+              <div className="form-row" style={{ marginTop: 8 }}>
+                <div className="field">
+                  <span>{t("base.activeTime")}</span>
+                  <strong className="mono">
+                    {timing.active_hours} {t("reports.hours")}
+                  </strong>
+                </div>
+                <div className="field">
+                  <span>{t("base.events")}</span>
+                  <strong className="mono">{timing.event_count}</strong>
+                </div>
+                <div className="field">
+                  <span>{t("base.saved_hours")}</span>
+                  <strong className="mono">
+                    {timing.saved_hours === null
+                      ? "—"
+                      : `${timing.saved_hours} ${t("reports.hours")}`}
+                  </strong>
+                </div>
+                <div className="field">
+                  <span>{t("base.savedRatio")}</span>
+                  <strong className="mono">
+                    {timing.saved_ratio === null
+                      ? "—"
+                      : `${Math.round(timing.saved_ratio * 100)}%`}
+                  </strong>
+                </div>
+              </div>
+              {!timing.measurable && (
+                <p className="muted" style={{ fontSize: "0.78rem" }}>
+                  {t("base.notMeasurable")}
+                </p>
+              )}
+            </>
+          )}
+        </div>
+
         {summary ? (
           <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
             <div>

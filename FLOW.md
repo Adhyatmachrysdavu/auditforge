@@ -78,11 +78,30 @@ Bukti**, **Riwayat**.
 Sistem merakit laporan **hanya dari temuan disetujui** (naratif final auditor menang atas draf
 AI) + kop surat, grafik, dan bukti.
 → **Buka:** tab **Ringkasan** → **Pratinjau** (HTML), **Unduh DOCX**, atau **Unduh PDF**.
-Branding kop diatur di **Administrasi** → **Branding Laporan**.
+Alternatif lintas penugasan → **Buka:** sidebar **Laporan** — satu baris per penugasan dengan
+tombol **Pratinjau / DOCX / PDF** yang sama. Bahasa laporan mengikuti pilihan **ID/EN** di
+antarmuka. Branding kop diatur di **Administrasi** → **Branding Laporan**.
 
-**11. Evaluasi.**
+**11. Isi baseline waktu penyusunan manual (auditor/admin).**
+Perkiraan jam yang dibutuhkan bila laporan ini disusun manual — menjadi pembanding klaim
+penghematan waktu. Isi juga catatan sumber angkanya agar dapat dipertahankan saat ditanya.
+→ **Buka:** tab **Ringkasan** → kartu **"Baseline Waktu Penyusunan Manual"** → isi **Baseline
+(jam)** + **Catatan sumber angka** → **Simpan Baseline**. Di bawahnya langsung tampil **waktu
+aktif tercatat**, jumlah **jejak revisi**, serta **hemat** dan **penghematan (%)**.
+Analis tidak boleh mengisi baseline (ditolak 403).
+
+**12. Evaluasi.**
 Metrik terukur nilai sistem: efisiensi dedup, cakupan draf AI, kemajuan review, rasio suntingan.
 → **Buka:** tab **Ringkasan** — **kartu metrik** di bagian atas.
+
+**13. Baca agregat waktu penyusunan.**
+Rata-rata penghematan waktu lintas penugasan — bukti untuk indikator "penurunan waktu penyusunan
+laporan minimal 50%". Waktu dihitung dari jejak revisi temuan; jeda antar-peristiwa dibatasi 30
+menit agar malam dan akhir pekan tidak ikut terhitung.
+→ **Buka:** sidebar **Laporan** — kartu **Rata-rata penghematan waktu**, **Penugasan terukur**,
+dan tabel per penugasan (**Waktu aktif**, **Baseline**, **Hemat**).
+Penugasan berlabel **"belum terukur"** memiliki kurang dari dua jejak revisi: sistem sengaja
+menahan angka penghematannya, bukan mengklaim 100%.
 
 > **Fitur admin** (di luar alur utama) → **Buka:** sidebar **Administrasi** → **Konfigurasi LLM**
 > (Base URL/key/model), **Branding Laporan**, **Pratinjau Masking**, **Jejak Audit**.
