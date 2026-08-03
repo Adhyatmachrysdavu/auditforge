@@ -27,6 +27,16 @@ class EngagementDetailOut(EngagementOut):
     exec_summary_model: str | None = None
     exec_summary_prompt_version: str | None = None
     exec_summary: dict | None = None
+    # --- Modul 1: baseline waktu ---
+    baseline_hours: float | None = None
+    baseline_note: str | None = None
+
+
+class BaselineIn(BaseModel):
+    """Angka pembanding waktu penyusunan manual (Modul 1)."""
+
+    baseline_hours: float | None = Field(default=None, ge=0)
+    baseline_note: str | None = None
 
 
 class ScanUploadOut(BaseModel):
