@@ -24,6 +24,7 @@ export default function IngestPage() {
 
   const load = useCallback(() => {
     setLoading(true);
+    setError(null);
     api
       .getIngest(onlyFailed ? "failed" : undefined)
       .then((d) => {
