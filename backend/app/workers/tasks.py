@@ -1,6 +1,7 @@
 """Task Celery: parsing → pengayaan (D8) → deduplikasi (D7) → simpan temuan."""
 from __future__ import annotations
 
+import logging
 import os
 import uuid
 
@@ -11,7 +12,8 @@ from app.core.config import get_settings
 from app.core.storage import get_bytes, put_bytes
 from app.db.session import SessionLocal
 from app.enrichment import enrich
-from app.ingest.rules import is_duplicate, sha256_of
+from app.ingest.dedup import find_parsed_duplicate
+from app.ingest.rules import sha256_of
 from app.ingest.watcher import iter_inbox_files, move_result
 from app.models.engagement import Engagement
 from app.models.enums import UploadStatus
@@ -22,6 +24,8 @@ from app.parsers import select_parser
 from app.parsers.base import UnifiedFinding
 from app.triage import triage
 from app.workers.celery_app import celery_app
+
+logger = logging.getLogger(__name__)
 
 
 def _apply_triage(row: Finding) -> None:
@@ -294,12 +298,17 @@ def parse_upload(upload_id: int) -> dict:
         db.close()
 
 
-def _ingest_watched_file(db: Session, engagement_id: int, path: str, name: str) -> bool:
+def _ingest_watched_file(db: Session, engagement_id: int, path: str, name: str) -> str:
     """Serap satu berkas dari folder terpantau: MinIO → ScanUpload → parse.
 
-    Mengembalikan True bila penguraian berhasil. Mengikuti konvensi unggah manual
-    (kunci `uploads/<eid>/...`, `tool="unknown"` → parser auto-sniff) agar temuan
-    masuk pipeline dedup/enrichment/triase yang sama.
+    Mengembalikan salah satu dari `"ingested"` (berhasil diurai), `"duplicate"`
+    (isinya sudah pernah diserap, dilewati tanpa diurai), atau `"failed"`.
+    Duplikat sengaja dibedakan dari berhasil: keduanya sama-sama pindah ke
+    `processed/`, tetapi hanya satu di antaranya benar-benar menambah temuan.
+
+    Mengikuti konvensi unggah manual (kunci `uploads/<eid>/...`,
+    `tool="unknown"` → parser auto-sniff) agar temuan masuk pipeline
+    dedup/enrichment/triase yang sama.
     """
     with open(path, "rb") as fh:
         content = fh.read()
@@ -307,17 +316,19 @@ def _ingest_watched_file(db: Session, engagement_id: int, path: str, name: str) 
     # Berkas identik yang sudah berhasil diserap: pindahkan ke processed/ tanpa
     # memproses ulang. Ini bukan kegagalan, jadi jangan masuk failed/.
     content_hash = sha256_of(content)
-    parsed_hashes = set(
-        db.scalars(
-            select(ScanUpload.content_hash).where(
-                ScanUpload.engagement_id == engagement_id,
-                ScanUpload.status == UploadStatus.parsed.value,
-                ScanUpload.content_hash.is_not(None),
-            )
-        ).all()
+    existing = find_parsed_duplicate(
+        db, engagement_id=engagement_id, content_hash=content_hash
     )
-    if is_duplicate(content_hash=content_hash, parsed_hashes=parsed_hashes):
-        return True
+    if existing is not None:
+        # Tanpa jejak ini, auditor yang menaruh berkas lalu tak melihat apa pun
+        # muncul tidak punya cara mengetahui sebabnya.
+        logger.info(
+            "auto-ingest: %s (penugasan %s) dilewati — isi identik dengan unggahan #%s",
+            name,
+            engagement_id,
+            existing.id,
+        )
+        return "duplicate"
 
     safe = name.replace("/", "_").replace("\\", "_")
     key = f"uploads/{engagement_id}/{uuid.uuid4().hex}_{safe}"
@@ -334,7 +345,7 @@ def _ingest_watched_file(db: Session, engagement_id: int, path: str, name: str) 
     db.commit()
     db.refresh(upload)
     result = parse_upload(upload.id)
-    return "error" not in result
+    return "ingested" if "error" not in result else "failed"
 
 
 @celery_app.task(name="auditforge.scan_inbox")
@@ -344,6 +355,9 @@ def scan_inbox() -> dict[str, object]:
     Auditor/skrip cukup menaruh berkas di `<watch_dir>/inbox/<engagement_id>/`;
     task periodik (Celery beat) ini yang memicu penguraian, sehingga tak perlu
     unggah manual lewat UI. Berkas dipindah ke `processed/` atau `failed/`.
+
+    Penghitung `duplicates` dipisahkan dari `processed` agar angka sukses tidak
+    melebih-lebihkan jumlah berkas yang benar-benar diserap.
     """
     settings = get_settings()
     base = settings.watch_dir
@@ -351,7 +365,7 @@ def scan_inbox() -> dict[str, object]:
         return {"skipped": "watcher nonaktif / folder tak ada", "base": base}
 
     db = SessionLocal()
-    processed = failed = 0
+    processed = duplicates = failed = 0
     try:
         for eid, path in iter_inbox_files(
             base, settle_seconds=settings.watch_settle_seconds
@@ -361,13 +375,15 @@ def scan_inbox() -> dict[str, object]:
                 failed += 1
                 continue
             try:
-                ok = _ingest_watched_file(db, eid, str(path), path.name)
+                outcome = _ingest_watched_file(db, eid, str(path), path.name)
             except Exception:  # noqa: BLE001 — satu berkas gagal tak boleh menghentikan pindaian
                 db.rollback()
-                ok = False
-            move_result(path, base, eid, ok=ok)
-            processed += int(ok)
-            failed += int(not ok)
-        return {"processed": processed, "failed": failed}
+                outcome = "failed"
+            # Duplikat bukan kegagalan: ikut pindah ke processed/, tetapi dihitung sendiri.
+            move_result(path, base, eid, ok=outcome != "failed")
+            processed += int(outcome == "ingested")
+            duplicates += int(outcome == "duplicate")
+            failed += int(outcome == "failed")
+        return {"processed": processed, "duplicates": duplicates, "failed": failed}
     finally:
         db.close()
