@@ -39,6 +39,15 @@ Sistem mengenali jenis perkakas otomatis (`sniff`), lalu parser mengubah isi ber
 **temuan** terpadu. Berjalan di latar (Celery). Berkas gagal ditandai `failed` tanpa
 mengganggu yang lain.
 → **Buka:** tab **Berkas** — pantau kolom **Status** tiap berkas (`parsed` / `failed`).
+Berkas `failed` tidak perlu diunggah ulang: tombol **Urai Ulang** pada barisnya memakai berkas
+mentah yang masih tersimpan di MinIO. Berguna setelah penyebab kegagalan diperbaiki (misalnya
+parser baru ditambahkan). Tombol hanya muncul bila berkas mentahnya masih ada, dan ditolak bila
+isi berkas itu ternyata sudah berhasil diserap lewat unggahan lain — mengurainya dua kali akan
+menggelembungkan hitungan kemunculan yang ikut menentukan prioritas triase.
+Berkas yang isinya **sama persis** dengan berkas yang sudah berhasil diurai di penugasan ini
+ditolak saat diunggah (sidik jari SHA-256 isi berkas). Yang dulu **gagal** tetap boleh dikirim
+ulang.
+*(Melihat berkas gagal dari seluruh penugasan sekaligus: lihat bagian D.)*
 
 **4. Normalisasi keparahan.**
 Keparahan dari berbagai perkakas disatukan ke satu skala: critical / high / medium / low / info.
@@ -149,6 +158,20 @@ Alternatif tanpa unggah manual lewat UI:
    MinIO, dibuat `ScanUpload`, perkakas dideteksi otomatis.
 4. Masuk **pipeline yang sama** dengan unggah manual (langkah A3–A7).
 5. Berkas lalu dipindah ke `processed/<id>/` (berhasil) atau `failed/<id>/` (gagal).
+6. Berkas yang isinya sama persis dengan berkas yang **sudah berhasil** diurai di penugasan itu
+   **dilewati tanpa diproses**: tidak ada `ScanUpload` baru, berkasnya tetap dipindah ke
+   `processed/<id>/` (ini bukan kegagalan), dan alasannya dicatat di log worker. Penghitung task
+   memisahkannya sebagai `duplicates`, terpisah dari `processed`.
+
+### Pusat Ingest — memantau ingest lintas penugasan
+
+Semua aktivitas di atas — unggah manual maupun serapan otomatis — terkumpul di satu halaman,
+sehingga berkas gagal tak perlu dicari dengan membuka tab **Berkas** penugasan satu per satu.
+→ **Buka:** sidebar **Ingest**. Berisi ringkasan (**masuk 24 jam terakhir**, **gagal belum
+ditangani**, **total berkas**), penyaring **Semua / Gagal saja**, dan satu baris per berkas
+dengan **waktu**, **penugasan** (tertaut), **berkas**, **perkakas**, **asal** (*manual* /
+*otomatis*), serta **status** — arahkan kursor ke badge status untuk membaca pesan galatnya.
+Baris yang memenuhi syarat punya tombol **Urai Ulang** yang sama dengan di tab Berkas.
 
 ---
 
