@@ -35,3 +35,6 @@ datasets/watch/failed/
 # OS/editor
 .DS_Store
 Thumbs.db
+
+# Artefak build TypeScript inkremental (regenerate tiap tsc jalan)
+frontend/tsconfig.tsbuildinfo

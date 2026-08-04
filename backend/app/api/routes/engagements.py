@@ -177,8 +177,21 @@ async def upload_scan(
     db.commit()
     db.refresh(upload)
 
-    # Parsing berjalan asinkron di worker Celery.
-    parse_upload.delay(upload.id)
+    # Parsing berjalan asinkron di worker Celery. Bila broker tak dapat dihubungi,
+    # baris ini akan tersangkut di `uploaded` selamanya: tak bisa diurai ulang
+    # (`can_reparse` hanya menerima `failed`) dan tak muncul pada penyaring
+    # "Gagal saja". Karena itu kegagalan pengiriman ditandai sebagai `failed`,
+    # sama seperti pada endpoint urai ulang.
+    try:
+        parse_upload.delay(upload.id)
+    except Exception as exc:  # noqa: BLE001 — kegagalan broker dikembalikan sebagai status
+        upload.status = UploadStatus.failed.value
+        upload.error = f"Gagal mengirim task penguraian: {type(exc).__name__}: {exc}"[:1000]
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Antrean pemrosesan tidak dapat dihubungi. Coba lagi nanti.",
+        ) from exc
 
     return _upload_out(upload)
 
