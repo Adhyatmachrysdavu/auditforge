@@ -1,9 +1,20 @@
 """Model penugasan audit/pentest (engagement)."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    true as sa_true,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, utcnow
@@ -35,3 +46,12 @@ class Engagement(Base):
     # ada klaim penghematan.
     baseline_hours: Mapped[float | None] = mapped_column(Float, nullable=True)
     baseline_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # --- Modul 2: kelengkapan penugasan (modul "Pengelolaan Penugasan" di proposal) ---
+    scope: Mapped[str | None] = mapped_column(Text, nullable=True)
+    period_start: Mapped[date | None] = mapped_column(Date, nullable=True)
+    period_end: Mapped[date | None] = mapped_column(Date, nullable=True)
+    # Boleh menjadi rujukan Basis Pengetahuan (Modul 3). Sebagian NDA melarang
+    # data klien dipakai untuk keperluan lain sekalipun internal.
+    kb_shareable: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=sa_true()
+    )
