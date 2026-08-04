@@ -448,6 +448,21 @@ export const saveEngagementDetails = (id: number, d: EngagementDetails) =>
 // membutuhkannya, jadi ditambahkan di sini.
 export const listUsers = () => req<User[]>("/users");
 
+export interface DiffSection {
+  before: string;
+  after: string;
+  added: string[];
+  removed: string[];
+  changed_ratio: number;
+}
+export interface NarrativeDiff {
+  sections: Record<string, DiffSection>;
+  /** Porsi kata yang diubah auditor, ditimbang panjang tiap bagian. */
+  overall_changed_ratio: number;
+}
+export const getFindingDiff = (id: number, findingId: number) =>
+  req<NarrativeDiff>(`/engagements/${id}/findings/${findingId}/diff`);
+
 // ---------- Pusat Ingest ----------
 export interface IngestItem {
   upload_id: number;

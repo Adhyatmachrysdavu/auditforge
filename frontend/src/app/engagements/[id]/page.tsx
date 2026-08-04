@@ -116,6 +116,8 @@ export default function EngagementDetailPage() {
   const [reviewMsg, setReviewMsg] = useState<string | null>(null);
   const [showHist, setShowHist] = useState(false);
   const [revs, setRevs] = useState<api.FindingRevision[]>([]);
+  // --- Modul 2: perbandingan draf AI vs naratif final ---
+  const [diff, setDiff] = useState<api.NarrativeDiff | null>(null);
   // --- D14: tab, mode tampilan, kanban, lampiran ---
   const [tab, setTab] = useState<"files" | "findings" | "summary" | "team">("findings");
   const [viewMode, setViewMode] = useState<"list" | "kanban">("list");
@@ -905,6 +907,30 @@ export default function EngagementDetailPage() {
                                   <ClockCounterClockwise size={15} />{" "}
                                   {showHist ? t("review.hideHistory") : t("review.history")}
                                 </button>
+                                <button
+                                  className="btn secondary"
+                                  onClick={() => {
+                                    if (diff) {
+                                      setDiff(null);
+                                      return;
+                                    }
+                                    setError(null);
+                                    api
+                                      .getFindingDiff(id, detail.id)
+                                      .then(setDiff)
+                                      .catch((err) =>
+                                        setError(
+                                          err instanceof ApiError
+                                            ? err.message
+                                            : String(err)
+                                        )
+                                      );
+                                  }}
+                                  disabled={reviewBusy}
+                                >
+                                  <ListChecks size={15} />{" "}
+                                  {diff ? t("diff.hide") : t("diff.tab")}
+                                </button>
                               </div>
 
                               {reviewMsg && <div className="alert ok">{reviewMsg}</div>}
@@ -1116,6 +1142,56 @@ export default function EngagementDetailPage() {
                               </div>
 
                               {/* Riwayat revisi */}
+                              {diff && (
+                                <div
+                                  className="card"
+                                  style={{ marginTop: 12, background: "var(--surface-2)" }}
+                                >
+                                  <p className="mono" style={{ marginTop: 0 }}>
+                                    {t("diff.overall")}:{" "}
+                                    {Math.round(diff.overall_changed_ratio * 100)}%
+                                  </p>
+                                  {Object.entries(diff.sections).map(([name, sec]) => (
+                                    <div key={name} style={{ marginTop: 10 }}>
+                                      <strong>
+                                        {t(`narr.${
+                                          name === "description"
+                                            ? "desc"
+                                            : name === "impact"
+                                            ? "impact"
+                                            : "rec"
+                                        }` as MessageKey)}
+                                      </strong>{" "}
+                                      <span className="mono">
+                                        ({Math.round(sec.changed_ratio * 100)}%)
+                                      </span>
+                                      {sec.added.length === 0 && sec.removed.length === 0 ? (
+                                        <p className="muted">{t("diff.none")}</p>
+                                      ) : (
+                                        <>
+                                          {sec.added.length > 0 && (
+                                            <p>
+                                              <span className="badge ok">
+                                                {t("diff.added")}
+                                              </span>{" "}
+                                              {sec.added.join(" ")}
+                                            </p>
+                                          )}
+                                          {sec.removed.length > 0 && (
+                                            <p>
+                                              <span className="badge err">
+                                                {t("diff.removed")}
+                                              </span>{" "}
+                                              {sec.removed.join(" ")}
+                                            </p>
+                                          )}
+                                        </>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+
                               {showHist && (
                                 <div
                                   style={{

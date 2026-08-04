@@ -30,6 +30,7 @@ from app.reporting.html_writer import render_html
 from app.reporting.pdf_writer import render_pdf
 from app.reporting.report_data import ReportData, build_report_data
 from app.review import can_transition, is_valid_status, role_allows_transition
+from app.review_diff import diff_narrative
 from app.schemas.engagement import (
     AttachmentOut,
     BaselineIn,
@@ -765,6 +766,23 @@ def list_revisions(
         )
         for r in rows
     ]
+
+
+@router.get("/{engagement_id}/findings/{finding_id}/diff")
+def finding_diff(
+    engagement_id: int,
+    finding_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict:
+    """Bandingkan draf AI dengan naratif final auditor.
+
+    `overall_changed_ratio` menjadi bahan bukti indikator proposal soal porsi
+    kalimat yang memerlukan penyuntingan berat.
+    """
+    _get_engagement(db, engagement_id, user)
+    f = _get_finding(db, engagement_id, finding_id)
+    return diff_narrative(f.ai_draft, f.final_narrative)
 
 
 # --------------------------------------------------------------------------- #
