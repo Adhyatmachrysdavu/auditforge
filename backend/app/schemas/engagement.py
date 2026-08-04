@@ -46,6 +46,9 @@ class ScanUploadOut(BaseModel):
     tool: str
     status: str
     error: str | None = None
+    # Diputuskan server (app.ingest.rules.can_reparse) supaya antarmuka tidak
+    # menurunkan aturannya sendiri dan ikut basi saat aturannya bertambah.
+    can_reparse: bool = False
 
 
 class FindingOut(BaseModel):

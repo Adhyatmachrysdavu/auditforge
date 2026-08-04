@@ -15,7 +15,8 @@ from app.core.storage import get_bytes, put_bytes, remove_object
 from app.db.session import get_db
 from app.eval.engagement_eval import evaluate_engagement
 from app.eval.timing import timing_summary
-from app.ingest.rules import can_reparse, is_duplicate, sha256_of
+from app.ingest.dedup import find_parsed_duplicate
+from app.ingest.rules import can_reparse, sha256_of
 from app.models.engagement import Engagement
 from app.models.enums import ScanTool, UploadStatus
 from app.models.finding import Finding, FindingAttachment, FindingRevision
@@ -54,6 +55,20 @@ def _get_engagement(db: Session, engagement_id: int) -> Engagement:
     if eng is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Penugasan tak ditemukan")
     return eng
+
+
+def _upload_out(u: ScanUpload) -> ScanUploadOut:
+    """Satu-satunya perakit ScanUploadOut agar `can_reparse` selalu ikut terisi."""
+    ok, _reason = can_reparse(status=u.status, has_storage_key=bool(u.storage_key))
+    return ScanUploadOut(
+        id=u.id,
+        engagement_id=u.engagement_id,
+        filename=u.filename,
+        tool=u.tool,
+        status=u.status,
+        error=u.error,
+        can_reparse=ok,
+    )
 
 
 def _engagement_out(e: Engagement) -> EngagementOut:
@@ -133,28 +148,15 @@ async def upload_scan(
     # Tolak berkas yang isinya sudah pernah BERHASIL diurai di penugasan ini.
     # Yang dulu gagal tidak masuk himpunan ini, jadi tetap boleh dikirim ulang.
     content_hash = sha256_of(content)
-    parsed_hashes = set(
-        db.scalars(
-            select(ScanUpload.content_hash).where(
-                ScanUpload.engagement_id == engagement_id,
-                ScanUpload.status == UploadStatus.parsed.value,
-                ScanUpload.content_hash.is_not(None),
-            )
-        ).all()
+    existing = find_parsed_duplicate(
+        db, engagement_id=engagement_id, content_hash=content_hash
     )
-    if is_duplicate(content_hash=content_hash, parsed_hashes=parsed_hashes):
-        existing = db.scalar(
-            select(ScanUpload).where(
-                ScanUpload.engagement_id == engagement_id,
-                ScanUpload.content_hash == content_hash,
-                ScanUpload.status == UploadStatus.parsed.value,
-            )
-        )
+    if existing is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
                 f"Berkas dengan isi identik sudah diserap "
-                f"(unggahan #{existing.id if existing else '?'})."
+                f"(unggahan #{existing.id})."
             ),
         )
 
@@ -178,13 +180,7 @@ async def upload_scan(
     # Parsing berjalan asinkron di worker Celery.
     parse_upload.delay(upload.id)
 
-    return ScanUploadOut(
-        id=upload.id,
-        engagement_id=upload.engagement_id,
-        filename=upload.filename,
-        tool=upload.tool,
-        status=upload.status,
-    )
+    return _upload_out(upload)
 
 
 @router.get("/{engagement_id}/uploads", response_model=list[ScanUploadOut])
@@ -197,17 +193,7 @@ def list_uploads(
     rows = db.scalars(
         select(ScanUpload).where(ScanUpload.engagement_id == engagement_id)
     ).all()
-    return [
-        ScanUploadOut(
-            id=u.id,
-            engagement_id=u.engagement_id,
-            filename=u.filename,
-            tool=u.tool,
-            status=u.status,
-            error=u.error,
-        )
-        for u in rows
-    ]
+    return [_upload_out(u) for u in rows]
 
 
 @router.post(
@@ -237,20 +223,42 @@ def reparse_upload(
     if not ok:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=reason)
 
+    # Berkas ini gagal, tetapi isinya bisa saja sudah masuk lewat unggahan lain
+    # yang berhasil (pengguna mengirim ulang berkas yang sama). Menguraikannya
+    # sekarang akan menghitung isi yang sama dua kali: `occurrences` tiap temuan
+    # naik dan triase dihitung ulang dari angka yang menggelembung.
+    existing = find_parsed_duplicate(
+        db, engagement_id=engagement_id, content_hash=upload.content_hash
+    )
+    if existing is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Isi berkas ini sudah berhasil diserap "
+                f"(unggahan #{existing.id}), sehingga tak perlu diurai ulang."
+            ),
+        )
+
     upload.status = UploadStatus.uploaded.value
     upload.error = None
     db.commit()
-    db.refresh(upload)
-    parse_upload.delay(upload.id)
 
-    return ScanUploadOut(
-        id=upload.id,
-        engagement_id=upload.engagement_id,
-        filename=upload.filename,
-        tool=upload.tool,
-        status=upload.status,
-        error=upload.error,
-    )
+    # Bila pengiriman task gagal (broker mati), kembalikan baris ke `failed`.
+    # Dibiarkan `uploaded` ia akan tersangkut selamanya: tak bisa diurai ulang
+    # dan tak lagi muncul pada penyaring "Gagal saja".
+    try:
+        parse_upload.delay(upload.id)
+    except Exception as exc:  # noqa: BLE001 — kegagalan broker dikembalikan sebagai status
+        upload.status = UploadStatus.failed.value
+        upload.error = f"Gagal mengirim task urai ulang: {type(exc).__name__}: {exc}"[:1000]
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Antrean pemrosesan tidak dapat dihubungi. Coba lagi nanti.",
+        ) from exc
+
+    db.refresh(upload)
+    return _upload_out(upload)
 
 
 @router.get("/{engagement_id}/findings", response_model=list[FindingOut])
