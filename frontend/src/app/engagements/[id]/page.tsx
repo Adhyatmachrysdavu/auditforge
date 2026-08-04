@@ -3,6 +3,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import {
+  ArrowClockwise,
   ClockCounterClockwise,
   Eye,
   FileArrowDown,
@@ -80,6 +81,7 @@ export default function EngagementDetailPage() {
 
   const [eng, setEng] = useState<api.EngagementDetail | null>(null);
   const [uploads, setUploads] = useState<api.ScanUpload[]>([]);
+  const [reparsingId, setReparsingId] = useState<number | null>(null);
   const [findings, setFindings] = useState<api.Finding[]>([]);
   const [file, setFile] = useState<File | null>(null);
   const [tool, setTool] = useState("nuclei");
@@ -150,6 +152,20 @@ export default function EngagementDetailPage() {
   useEffect(() => {
     refresh().catch(() => {});
   }, [refresh]);
+
+  async function handleReparse(uploadId: number) {
+    setReparsingId(uploadId);
+    setError(null);
+    try {
+      await api.reparseUpload(id, uploadId);
+      // Parsing asinkron di worker; beri jeda sebelum memuat ulang daftar berkas.
+      setTimeout(() => void refresh(), 2500);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : String(err));
+    } finally {
+      setReparsingId(null);
+    }
+  }
 
   // Isi formulir baseline sekali saat penugasan termuat; dikunci pada `eng?.id`
   // agar refresh berkala tidak menimpa yang sedang diketik auditor.
@@ -536,6 +552,7 @@ export default function EngagementDetailPage() {
                   <th>{t("up.tool")}</th>
                   <th>{t("up.status")}</th>
                   <th>{t("up.error")}</th>
+                  <th />
                 </tr>
               </thead>
               <tbody>
@@ -549,6 +566,20 @@ export default function EngagementDetailPage() {
                       </span>
                     </td>
                     <td className="muted">{u.error || "—"}</td>
+                    <td>
+                      {u.status === "failed" && (
+                        <button
+                          className="btn secondary"
+                          disabled={reparsingId === u.id}
+                          onClick={() => handleReparse(u.id)}
+                        >
+                          <ArrowClockwise size={14} />{" "}
+                          {reparsingId === u.id
+                            ? t("ingest.reparsing")
+                            : t("ingest.reparse")}
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
