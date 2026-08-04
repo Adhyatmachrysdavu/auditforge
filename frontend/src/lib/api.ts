@@ -88,6 +88,8 @@ export interface ScanUpload {
   tool: string;
   status: string;
   error: string | null;
+  /** Diputuskan server; jangan menurunkan ulang aturannya di antarmuka. */
+  can_reparse: boolean;
 }
 export interface Finding {
   id: number;

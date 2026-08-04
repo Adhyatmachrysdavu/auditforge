@@ -25,7 +25,7 @@ export default function IngestPage() {
   const load = useCallback(() => {
     setLoading(true);
     setError(null);
-    api
+    return api
       .getIngest(onlyFailed ? "failed" : undefined)
       .then((d) => {
         setData(d);
@@ -38,7 +38,9 @@ export default function IngestPage() {
       .finally(() => setLoading(false));
   }, [onlyFailed]);
 
-  useEffect(load, [load]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   async function reparse(item: api.IngestItem) {
     setBusyId(item.upload_id);
@@ -46,10 +48,14 @@ export default function IngestPage() {
     try {
       await api.reparseUpload(item.engagement_id, item.upload_id);
       // Parsing berjalan asinkron di worker; beri jeda sebelum memuat ulang.
-      setTimeout(load, 2500);
+      // Tombol tetap terkunci sampai pemuatan ulang selesai — dilepas lebih awal,
+      // klik kedua mengenai baris yang statusnya sudah `uploaded` dan hanya
+      // menghasilkan 409 yang membingungkan.
+      setTimeout(() => {
+        void load().finally(() => setBusyId(null));
+      }, 2500);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : String(err));
-    } finally {
       setBusyId(null);
     }
   }
@@ -95,7 +101,7 @@ export default function IngestPage() {
         {loading ? (
           <p className="muted">…</p>
         ) : loadFailed ? (
-          <p className="muted">{t("ingest.empty")}</p>
+          <p className="muted">{t("ingest.loadError")}</p>
         ) : items.length === 0 ? (
           <p className="muted">{t("ingest.empty")}</p>
         ) : (

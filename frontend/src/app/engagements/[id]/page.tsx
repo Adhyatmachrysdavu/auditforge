@@ -567,7 +567,7 @@ export default function EngagementDetailPage() {
                     </td>
                     <td className="muted">{u.error || "—"}</td>
                     <td>
-                      {u.status === "failed" && (
+                      {u.can_reparse && (
                         <button
                           className="btn secondary"
                           disabled={reparsingId === u.id}
