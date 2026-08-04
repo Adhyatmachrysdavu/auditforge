@@ -58,16 +58,22 @@ def timing_overview(
     melihat agregat seluruh penugasan.
     """
     rows = db.execute(
-        select(Finding.engagement_id, FindingRevision.action, FindingRevision.created_at)
+        select(
+            Finding.engagement_id,
+            FindingRevision.action,
+            FindingRevision.created_at,
+            FindingRevision.author_id,
+        )
         .select_from(FindingRevision)
         .join(Finding, FindingRevision.finding_id == Finding.id)
         .order_by(FindingRevision.created_at)
     ).all()
 
+    # `author_id` wajib ikut: itu yang memisahkan kerja auditor dari draf worker AI.
     by_eng: dict[int, list[object]] = {}
-    for eid, action, created_at in rows:
+    for eid, action, created_at, author_id in rows:
         by_eng.setdefault(eid, []).append(
-            SimpleNamespace(action=action, created_at=created_at)
+            SimpleNamespace(action=action, created_at=created_at, author_id=author_id)
         )
 
     items: list[dict] = []

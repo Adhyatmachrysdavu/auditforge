@@ -93,8 +93,18 @@ export default function ReportsPage() {
                     <td className="mono">{r.engagement_id}</td>
                     <td>{r.name}</td>
                     <td>{r.client_name}</td>
-                    <td className="mono">
-                      {r.active_hours} {t("reports.hours")}
+                    {/* Waktu manusia yang ditampilkan — itu dasar klaim penghematan.
+                        Total (termasuk worker AI) disajikan sebagai tooltip agar
+                        pembaca tetap bisa melihat keduanya. */}
+                    <td
+                      className="mono"
+                      title={`${t("reports.totalWithAi")}: ${r.active_hours} ${t(
+                        "reports.hours"
+                      )} · ${r.human_event_count}/${r.event_count} ${t(
+                        "reports.humanEvents"
+                      )}`}
+                    >
+                      {r.active_hours_human} {t("reports.hours")}
                     </td>
                     <td className="mono">
                       {r.baseline_hours === null ? (

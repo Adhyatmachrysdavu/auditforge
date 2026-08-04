@@ -358,13 +358,21 @@ export const getEvaluation = (id: number) =>
 // ---------- Modul 1: metrik waktu penyusunan ----------
 export interface Timing {
   event_count: number;
+  /** Revisi yang ditulis auditor (author_id terisi). */
+  human_event_count: number;
+  /** Revisi yang ditulis worker AI (author_id null) — draf naratif. */
+  ai_event_count: number;
   first_at: string | null;
   last_at: string | null;
   calendar_seconds: number;
+  /** Waktu aktif seluruh jejak, termasuk latensi worker AI. Untuk transparansi. */
   active_seconds: number;
   active_hours: number;
+  /** Waktu aktif manusia saja — inilah dasar klaim penghematan. */
+  active_seconds_human: number;
+  active_hours_human: number;
   events_by_action: Record<string, number>;
-  /** false bila jejak revisi kurang dari dua stempel waktu — tak ada yang bisa dihitung. */
+  /** false bila kerja manusia kurang dari dua stempel waktu — tak ada klaim yang sah. */
   measurable: boolean;
   baseline_hours: number | null;
   saved_hours: number | null;

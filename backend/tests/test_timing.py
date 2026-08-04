@@ -9,9 +9,23 @@ from app.eval.timing import active_work_seconds, aggregate_timing, timing_summar
 T0 = datetime(2026, 8, 1, 9, 0, 0)
 
 
-def _ev(action: str, minutes: float):
-    """Peristiwa revisi palsu (duck-typed seperti FindingRevision)."""
-    return SimpleNamespace(action=action, created_at=T0 + timedelta(minutes=minutes))
+def _ev(action: str, minutes: float, author_id: int | None = 1):
+    """Peristiwa revisi palsu (duck-typed seperti FindingRevision).
+
+    `author_id=None` menandai revisi yang ditulis worker AI — konvensi yang sama
+    dipakai `FindingRevision` sungguhan (lihat `workers/tasks.py`). Default di
+    sini manusia, karena mayoritas uji berbicara tentang kerja auditor.
+    """
+    return SimpleNamespace(
+        action=action,
+        created_at=T0 + timedelta(minutes=minutes),
+        author_id=author_id,
+    )
+
+
+def _ai(action: str, minutes: float):
+    """Peristiwa yang ditulis worker AI (author_id None)."""
+    return _ev(action, minutes, author_id=None)
 
 
 def test_active_work_clamps_long_gaps():
@@ -66,10 +80,11 @@ def test_active_work_mixed_aware_and_naive_stamps():
 
 def test_summary_mixed_aware_and_naive_does_not_crash():
     evs = [
-        SimpleNamespace(action="edit", created_at=T0),
+        SimpleNamespace(action="edit", created_at=T0, author_id=1),
         SimpleNamespace(
             action="approve",
             created_at=(T0 + timedelta(minutes=10)).replace(tzinfo=UTC),
+            author_id=1,
         ),
     ]
     m = timing_summary(evs)
@@ -199,3 +214,65 @@ def test_aggregate_timing_accepts_full_summary_dicts():
     agg = aggregate_timing([measured, empty])
     assert agg["engagements_measured"] == 1
     assert agg["avg_saved_ratio"] == measured["saved_ratio"]
+
+
+# --- Pemisahan waktu manusia vs waktu worker AI ---------------------------
+
+
+def test_human_time_excludes_ai_events():
+    # Worker AI menulis 3 draf berjarak 10 mnt; auditor lalu bekerja 2 x 5 mnt.
+    # Waktu manusia hanya menghitung deret peristiwa manusia (600 dtk),
+    # sedangkan waktu total tetap mencakup semuanya.
+    evs = [
+        _ai("ai_draft", 0),
+        _ai("ai_draft", 10),
+        _ai("ai_draft", 20),
+        _ev("submit", 30),
+        _ev("approve", 35),
+        _ev("approve", 40),
+    ]
+    m = timing_summary(evs)
+    assert m["active_seconds"] == 2400.0  # seluruh deret, 6 peristiwa
+    assert m["active_seconds_human"] == 600.0  # hanya 30→35→40
+    assert m["human_event_count"] == 3
+    assert m["ai_event_count"] == 3
+
+
+def test_saving_uses_human_time_not_total():
+    # Baseline adalah waktu manusia menyusun manual, jadi pembandingnya harus
+    # waktu manusia — bukan total yang mengandung latensi worker AI.
+    evs = [
+        _ai("ai_draft", 0),
+        _ai("ai_draft", 20),
+        _ev("submit", 40),
+        _ev("approve", 50),
+    ]
+    m = timing_summary(evs, baseline_hours=1.0)
+    assert m["active_seconds_human"] == 600.0  # 40→50 saja
+    # Penghematan dihitung dari 600 dtk manusia, bukan 3000 dtk total.
+    assert abs(float(m["saved_hours"]) - (1.0 - 600.0 / 3600)) < 0.01
+    assert float(m["saved_ratio"]) > 0.8
+
+
+def test_only_ai_events_claims_nothing():
+    # Kasus nyata penugasan #17 sebelum auditor menyetujui apa pun: seluruh
+    # jejak berasal dari worker. Tidak ada kerja manusia untuk dibandingkan,
+    # jadi klaim penghematan harus ditahan meski baseline terisi.
+    evs = [_ai("ai_draft", 0), _ai("ai_draft", 5), _ai("ai_draft", 10)]
+    m = timing_summary(evs, baseline_hours=8.0)
+    assert m["human_event_count"] == 0
+    assert m["active_seconds_human"] == 0.0
+    assert m["measurable"] is False
+    assert m["saved_hours"] is None
+    assert m["saved_ratio"] is None
+    # Waktu total tetap dilaporkan apa adanya, untuk transparansi.
+    assert m["active_seconds"] == 600.0
+
+
+def test_single_human_event_not_measurable():
+    # Satu peristiwa manusia tak menghasilkan durasi — tak cukup untuk klaim.
+    evs = [_ai("ai_draft", 0), _ai("ai_draft", 10), _ev("approve", 20)]
+    m = timing_summary(evs, baseline_hours=8.0)
+    assert m["human_event_count"] == 1
+    assert m["measurable"] is False
+    assert m["saved_ratio"] is None

@@ -21,14 +21,22 @@ bernilai `False` dan klaim penghematan ditahan (`None`) walau baseline terisi.
 Tanpa penjagaan itu penugasan tanpa riwayat revisi akan melaporkan penghematan
 100%, padahal yang sebenarnya terjadi adalah tidak ada data.
 
-Keterbatasan yang diketahui (belum ditangani, sengaja):
+**Waktu manusia dipisahkan dari waktu worker AI.** Revisi ber-`author_id`
+`None` ditulis worker Celery (draf AI), bukan auditor; jarak antar-revisi
+tersebut mencerminkan latensi LLM, bukan kerja manusia. Karena `baseline_hours`
+berarti "berapa lama auditor menyusun laporan secara manual", klaim penghematan
+dihitung **hanya dari waktu manusia** — apel dibandingkan apel. Waktu total
+tetap dilaporkan (`active_seconds`) demi transparansi, tetapi tidak dipakai
+untuk mengklaim apa pun.
 
-- **Waktu mesin ikut terhitung.** Revisi ber-`action` `ai_draft` ditulis worker
-  Celery, bukan manusia; jarak antar-revisi tersebut mencerminkan latensi LLM.
-  Angka "waktu penyusunan" di modul ini karena itu mencakup waktu tunggu worker
-  AI, bukan murni waktu manusia. Pemisahan waktu manusia vs waktu AI
-  direncanakan sebagai pekerjaan terpisah — sampai itu selesai, angka ini harus
-  dibaca sebagai batas atas waktu manusia.
+Konsekuensinya, penugasan yang seluruh jejaknya berasal dari worker AI tidak
+dapat mengklaim penghematan sama sekali: tak ada kerja manusia untuk
+dibandingkan. Itu disengaja — sebelumnya kasus seperti itu melaporkan
+penghematan ~98% yang sesungguhnya cuma mengukur latensi LLM.
+
+Catatan: `active_seconds_human` dan `active_seconds` dihitung dari dua deret
+peristiwa yang berbeda, sehingga **bukan** bilangan yang bisa dijumlahkan atau
+dikurangkan satu sama lain.
 """
 from __future__ import annotations
 
@@ -60,6 +68,25 @@ def _sorted_stamps(timestamps: Iterable[datetime]) -> list[datetime]:
     return sorted(_as_utc(t) for t in timestamps)
 
 
+def _is_human(event: object) -> bool:
+    """True bila revisi ditulis manusia.
+
+    Konvensi `FindingRevision`: draf yang disusun worker AI disimpan dengan
+    `author_id=None` (lihat `workers/tasks.py`), sedangkan setiap aksi auditor
+    membawa id penggunanya.
+    """
+    return getattr(event, "author_id", None) is not None
+
+
+def _stamps_of(events: Iterable[object]) -> list[datetime]:
+    """Ambil stempel waktu yang valid dari daftar peristiwa, terurut."""
+    return _sorted_stamps(
+        s
+        for s in (getattr(e, "created_at", None) for e in events)
+        if isinstance(s, datetime)
+    )
+
+
 def active_work_seconds(
     timestamps: Iterable[datetime], *, gap_seconds: float = DEFAULT_GAP_SECONDS
 ) -> float:
@@ -85,40 +112,47 @@ def timing_summary(
     gap_seconds: float = DEFAULT_GAP_SECONDS,
 ) -> dict[str, object]:
     """Ringkas jejak revisi menjadi metrik waktu (duck-typed: `.action`, `.created_at`)."""
-    stamps = _sorted_stamps(
-        s for s in (getattr(e, "created_at", None) for e in events)
-        if isinstance(s, datetime)
-    )
+    human_events = [e for e in events if _is_human(e)]
+    stamps = _stamps_of(events)
+    human_stamps = _stamps_of(human_events)
 
     by_action: dict[str, int] = {}
     for e in events:
         a = str(getattr(e, "action", "") or "unknown")
         by_action[a] = by_action.get(a, 0) + 1
 
-    # Kurang dari dua stempel waktu → tak ada durasi yang bisa dihitung sama sekali.
-    measurable = len(stamps) >= 2
     active = active_work_seconds(stamps, gap_seconds=gap_seconds)
-    calendar = (stamps[-1] - stamps[0]).total_seconds() if measurable else 0.0
+    active_human = active_work_seconds(human_stamps, gap_seconds=gap_seconds)
+    calendar = (
+        (stamps[-1] - stamps[0]).total_seconds() if len(stamps) >= 2 else 0.0
+    )
+
+    # Klaim penghematan bersandar pada kerja MANUSIA: butuh minimal dua stempel
+    # manusia agar ada durasi untuk dibandingkan. Jejak yang seluruhnya berasal
+    # dari worker AI tidak mengukur apa pun tentang waktu auditor.
+    measurable = len(human_stamps) >= 2
 
     saved_hours: float | None = None
     saved_ratio: float | None = None
     # Baseline <= 0 diperlakukan seperti tidak ada: tak ada yang bisa dibandingkan.
-    # Tanpa `measurable`, baseline yang terisi akan menghasilkan klaim hemat 100%
-    # yang menyesatkan — itu bukan penghematan, itu ketiadaan data.
     if measurable and baseline_hours is not None and baseline_hours > 0:
         # Dihitung dari detik mentah, dibulatkan sekali di akhir: pembulatan
         # berantai lewat `active_hours` menghasilkan angka yang tidak konsisten.
-        raw_saved = baseline_hours - active / 3600
+        raw_saved = baseline_hours - active_human / 3600
         saved_hours = _round(raw_saved, 2)
         saved_ratio = _round(raw_saved / baseline_hours, 4)
 
     return {
         "event_count": len(events),
+        "human_event_count": len(human_events),
+        "ai_event_count": len(events) - len(human_events),
         "first_at": stamps[0].isoformat() if stamps else None,
         "last_at": stamps[-1].isoformat() if stamps else None,
         "calendar_seconds": _round(calendar, 2),
         "active_seconds": _round(active, 2),
         "active_hours": _round(active / 3600, 2),
+        "active_seconds_human": _round(active_human, 2),
+        "active_hours_human": _round(active_human / 3600, 2),
         "events_by_action": by_action,
         "measurable": measurable,
         "baseline_hours": baseline_hours,

@@ -666,13 +666,20 @@ def engagement_timing(
     # Hanya dua kolom yang dipakai; menarik baris ORM utuh ikut membawa blob
     # JSON `narrative` tiap revisi tanpa alasan.
     rows = db.execute(
-        select(FindingRevision.action, FindingRevision.created_at)
+        select(
+            FindingRevision.action,
+            FindingRevision.created_at,
+            FindingRevision.author_id,
+        )
         .select_from(FindingRevision)
         .join(Finding, FindingRevision.finding_id == Finding.id)
         .where(Finding.engagement_id == engagement_id)
         .order_by(FindingRevision.created_at)
     ).all()
-    events = [SimpleNamespace(action=a, created_at=c) for a, c in rows]
+    # `author_id` wajib ikut: itu yang memisahkan kerja auditor dari draf worker AI.
+    events = [
+        SimpleNamespace(action=a, created_at=c, author_id=au) for a, c, au in rows
+    ]
     return timing_summary(events, baseline_hours=eng.baseline_hours)
 
 
