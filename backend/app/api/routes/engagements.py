@@ -210,6 +210,49 @@ def list_uploads(
     ]
 
 
+@router.post(
+    "/{engagement_id}/uploads/{upload_id}/reparse", response_model=ScanUploadOut
+)
+def reparse_upload(
+    engagement_id: int,
+    upload_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles("analyst", "auditor", "admin")),
+) -> ScanUploadOut:
+    """Urai ulang berkas yang gagal, memakai berkas mentah yang masih tersimpan.
+
+    Bukan keputusan persetujuan melainkan pemrosesan berkas, sehingga analis
+    juga berwenang — setara dengan hak mengunggah yang sudah dimilikinya.
+    """
+    _get_engagement(db, engagement_id)
+    upload = db.get(ScanUpload, upload_id)
+    if upload is None or upload.engagement_id != engagement_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Unggahan tak ditemukan"
+        )
+
+    ok, reason = can_reparse(
+        status=upload.status, has_storage_key=bool(upload.storage_key)
+    )
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=reason)
+
+    upload.status = UploadStatus.uploaded.value
+    upload.error = None
+    db.commit()
+    db.refresh(upload)
+    parse_upload.delay(upload.id)
+
+    return ScanUploadOut(
+        id=upload.id,
+        engagement_id=upload.engagement_id,
+        filename=upload.filename,
+        tool=upload.tool,
+        status=upload.status,
+        error=upload.error,
+    )
+
+
 @router.get("/{engagement_id}/findings", response_model=list[FindingOut])
 def list_findings(
     engagement_id: int,
