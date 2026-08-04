@@ -174,6 +174,21 @@ laporan akhir memuat periode dan cakupan sebagaimana dijanjikan proposal.
 
 Batasan unik pada `(engagement_id, user_id)`.
 
+**Siapa yang boleh mengelola keanggotaan: auditor dan admin.** Menambahkan seseorang ke
+sebuah penugasan berarti memberinya akses ke data kerentanan klien — itu keputusan
+kepercayaan, setara dengan wewenang menyetujui temuan, bukan pekerjaan analisis harian.
+Analis yang menjadi anggota tetap dapat melihat daftar rekan setimnya, tetapi tidak dapat
+mengubahnya.
+
+| Endpoint | Peran |
+|---|---|
+| `GET /engagements/{id}/members` | anggota penugasan |
+| `POST /engagements/{id}/members` | auditor, admin |
+| `DELETE /engagements/{id}/members/{user_id}` | auditor, admin |
+
+Menghapus anggota terakhir sebuah penugasan ditolak `409`: penugasan tanpa anggota hanya
+dapat diakses admin, dan itu cara paling mudah kehilangan akses ke data tanpa sadar.
+
 ### 4.3 Pembatasan akses
 
 Aturannya sederhana dan *fail-closed*:
@@ -185,11 +200,19 @@ Titik penerapannya sudah tersedia: `_get_engagement()` pada `api/routes/engageme
 dipanggil oleh **18 dari 21 route**. Menambahkan pengecekan di sana menutup hampir seluruh
 permukaan sekaligus, tanpa menyebar logika ke mana-mana.
 
-Yang perlu ditangani terpisah:
+Yang perlu ditangani terpisah — seluruhnya sudah ditandai `TODO(Modul 2)` di kode kecuali
+dua yang pertama:
 
 - `GET /engagements` (daftar) — saring berdasarkan keanggotaan
 - `POST /engagements` (buat) — pembuat otomatis menjadi anggota `lead`
 - `GET /stats` — agregat hanya dari penugasan yang boleh diakses
+- `GET /stats/timing` — agregat waktu lintas penugasan (Modul 1)
+- `GET /ingest` — aktivitas ingest lintas penugasan (spec Pusat Ingest,
+  `2026-08-04-pusat-ingest-design.md`). Endpoint ini belum ada saat bagian ini pertama
+  ditulis; penandanya sudah dipasang di `api/routes/ingest.py`.
+
+Menghapus kedua penanda `TODO(Modul 2)` yang ada di `stats.py` dan `ingest.py` adalah bagian
+dari kriteria selesai modul ini.
 
 Helper murni pada `app/access.py` agar dapat diuji tanpa basis data:
 
@@ -201,7 +224,7 @@ def can_access_engagement(*, role: str, is_member: bool) -> bool
 
 **Ini bagian paling berisiko dari seluruh spec.**
 
-Basis data saat ini memuat 17 penugasan dan **tak satu pun memiliki anggota tim**. Bila
+Basis data saat ini memuat 18 penugasan dan **tak satu pun memiliki anggota tim**. Bila
 pembatasan akses diaktifkan tanpa pengisian data, setiap pengguna non-admin akan kehilangan
 akses ke seluruh penugasan seketika.
 
@@ -239,6 +262,19 @@ Keluaran per bagian: teks sebelum, teks sesudah, daftar kata yang ditambah/dihap
 | `GET /engagements/{id}/findings/{fid}/diff?from={rev}&to={rev}` | Bandingkan dua revisi mana pun |
 
 Di UI: tab **Perbandingan** pada panel review, di samping Riwayat yang sudah ada.
+
+### 4.6 Letak antarmuka
+
+**Tab baru "Tim"** pada halaman penugasan, sejajar dengan Berkas / Temuan / Ringkasan.
+Isinya: daftar anggota beserta perannya, tombol tambah/hapus (hanya aktif bagi auditor dan
+admin), serta **periode pelaksanaan dan cakupan pengujian** — ketiganya sama-sama menjawab
+modul "Pengelolaan Penugasan" di proposal, jadi wajar berada di satu tempat.
+
+Alasan tab tersendiri: `engagements/[id]/page.tsx` sudah ~1300 baris dan tab Ringkasan kini
+memuat tiga hal yang berbeda (ringkasan AI, baseline, metrik waktu). Menambahkan pengelolaan
+tim ke sana akan mencampur hal keempat yang tak berhubungan.
+
+Seluruh teks baru wajib ditambahkan ke **kedua** locale di `i18n/messages.ts`.
 
 ---
 
