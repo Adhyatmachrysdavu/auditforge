@@ -35,10 +35,13 @@ from app.schemas.engagement import (
     BaselineIn,
     EngagementCreate,
     EngagementDetailOut,
+    EngagementDetailsIn,
     EngagementOut,
     FindingDetailOut,
     FindingOut,
     FindingRevisionOut,
+    MemberIn,
+    MemberOut,
     NarrativeEditIn,
     NarrativeJobOut,
     ScanUploadOut,
@@ -172,7 +175,135 @@ def get_engagement(
         exec_summary=e.exec_summary,
         baseline_hours=e.baseline_hours,
         baseline_note=e.baseline_note,
+        scope=e.scope,
+        period_start=e.period_start,
+        period_end=e.period_end,
+        kb_shareable=e.kb_shareable,
     )
+
+
+def _member_out(m: EngagementMember, u: User) -> MemberOut:
+    return MemberOut(
+        user_id=u.id,
+        email=u.email,
+        full_name=u.full_name,
+        role=u.role.name,
+        role_in_team=m.role_in_team,
+    )
+
+
+@router.get("/{engagement_id}/members", response_model=list[MemberOut])
+def list_members(
+    engagement_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> list[MemberOut]:
+    """Daftar anggota tim. Analis anggota boleh melihat, tapi tak boleh mengubah."""
+    _get_engagement(db, engagement_id, user)
+    rows = db.execute(
+        select(EngagementMember, User)
+        .join(User, User.id == EngagementMember.user_id)
+        .where(EngagementMember.engagement_id == engagement_id)
+        .order_by(EngagementMember.id)
+    ).all()
+    return [_member_out(m, u) for m, u in rows]
+
+
+@router.post(
+    "/{engagement_id}/members",
+    response_model=MemberOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def add_member(
+    engagement_id: int,
+    payload: MemberIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles("auditor", "admin")),
+) -> MemberOut:
+    """Tambah anggota tim.
+
+    Dibatasi auditor/admin: menambahkan seseorang berarti memberinya akses ke
+    data kerentanan klien — keputusan kepercayaan, bukan pekerjaan harian.
+    """
+    _get_engagement(db, engagement_id, user)
+
+    target = db.get(User, payload.user_id)
+    if target is None or not target.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Pengguna tak ditemukan"
+        )
+
+    existing = db.scalar(
+        select(EngagementMember).where(
+            EngagementMember.engagement_id == engagement_id,
+            EngagementMember.user_id == payload.user_id,
+        )
+    )
+    if existing is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Pengguna sudah menjadi anggota penugasan ini.",
+        )
+
+    role_in_team = (
+        payload.role_in_team if payload.role_in_team in {"lead", "member"} else "member"
+    )
+    member = EngagementMember(
+        engagement_id=engagement_id,
+        user_id=payload.user_id,
+        role_in_team=role_in_team,
+        added_by=user.id,
+    )
+    db.add(member)
+    db.commit()
+    db.refresh(member)
+    return _member_out(member, target)
+
+
+@router.delete(
+    "/{engagement_id}/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT
+)
+def remove_member(
+    engagement_id: int,
+    user_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles("auditor", "admin")),
+) -> Response:
+    """Keluarkan anggota dari penugasan.
+
+    Anggota terakhir tidak boleh dikeluarkan: penugasan tanpa anggota hanya
+    dapat dibuka admin, dan itu cara termudah kehilangan akses tanpa sadar.
+    """
+    _get_engagement(db, engagement_id, user)
+
+    member = db.scalar(
+        select(EngagementMember).where(
+            EngagementMember.engagement_id == engagement_id,
+            EngagementMember.user_id == user_id,
+        )
+    )
+    if member is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Anggota tak ditemukan"
+        )
+
+    total = db.scalar(
+        select(func.count())
+        .select_from(EngagementMember)
+        .where(EngagementMember.engagement_id == engagement_id)
+    ) or 0
+    if total <= 1:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Anggota terakhir tidak dapat dikeluarkan. "
+                "Tambahkan anggota lain lebih dulu."
+            ),
+        )
+
+    db.delete(member)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post(

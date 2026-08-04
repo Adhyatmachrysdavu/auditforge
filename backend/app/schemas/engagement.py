@@ -1,7 +1,7 @@
 """Skema Pydantic untuk penugasan (engagement) & unggahan/temuan."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, Field
 
@@ -30,6 +30,35 @@ class EngagementDetailOut(EngagementOut):
     # --- Modul 1: baseline waktu ---
     baseline_hours: float | None = None
     baseline_note: str | None = None
+    # --- Modul 2: kelengkapan penugasan ---
+    scope: str | None = None
+    period_start: date | None = None
+    period_end: date | None = None
+    kb_shareable: bool = True
+
+
+class MemberOut(BaseModel):
+    """Satu anggota tim penugasan, sudah digabung dengan data penggunanya."""
+
+    user_id: int
+    email: str
+    full_name: str
+    role: str          # peran RBAC aplikasi (admin/auditor/analyst)
+    role_in_team: str  # 'lead' | 'member'
+
+
+class MemberIn(BaseModel):
+    user_id: int
+    role_in_team: str = "member"
+
+
+class EngagementDetailsIn(BaseModel):
+    """Kelengkapan penugasan (modul "Pengelolaan Penugasan" di proposal)."""
+
+    scope: str | None = None
+    period_start: date | None = None
+    period_end: date | None = None
+    kb_shareable: bool = True
 
 
 class BaselineIn(BaseModel):
