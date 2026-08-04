@@ -87,6 +87,17 @@ export default function EngagementDetailPage() {
   const [tool, setTool] = useState("nuclei");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // --- Modul 2: tab Tim ---
+  const [members, setMembers] = useState<api.Member[]>([]);
+  const [allUsers, setAllUsers] = useState<api.User[]>([]);
+  const [pickUser, setPickUser] = useState("");
+  const [scope, setScope] = useState("");
+  const [periodStart, setPeriodStart] = useState("");
+  const [periodEnd, setPeriodEnd] = useState("");
+  const [kbShareable, setKbShareable] = useState(true);
+  // Pesan tersendiri: `baseMsg` khusus baseline di tab Ringkasan, memakainya
+  // di sini membuat pesan muncul di tab yang salah.
+  const [teamMsg, setTeamMsg] = useState<string | null>(null);
   const [genBusy, setGenBusy] = useState(false);
   const [triBusy, setTriBusy] = useState(false);
   const [narrMsg, setNarrMsg] = useState<string | null>(null);
@@ -106,7 +117,7 @@ export default function EngagementDetailPage() {
   const [showHist, setShowHist] = useState(false);
   const [revs, setRevs] = useState<api.FindingRevision[]>([]);
   // --- D14: tab, mode tampilan, kanban, lampiran ---
-  const [tab, setTab] = useState<"files" | "findings" | "summary">("findings");
+  const [tab, setTab] = useState<"files" | "findings" | "summary" | "team">("findings");
   const [viewMode, setViewMode] = useState<"list" | "kanban">("list");
   const [dragId, setDragId] = useState<number | null>(null);
   const [atts, setAtts] = useState<api.Attachment[]>([]);
@@ -152,6 +163,34 @@ export default function EngagementDetailPage() {
   useEffect(() => {
     refresh().catch(() => {});
   }, [refresh]);
+
+  const loadTeam = useCallback(async () => {
+    const [ms, us] = await Promise.all([
+      api.listMembers(id),
+      // Daftar pengguna hanya untuk dropdown; kegagalannya tak boleh
+      // menghalangi daftar anggota tampil.
+      api.listUsers().catch(() => [] as api.User[]),
+    ]);
+    setMembers(ms);
+    setAllUsers(us);
+  }, [id]);
+
+  useEffect(() => {
+    if (tab === "team") {
+      loadTeam().catch((err) =>
+        setError(err instanceof ApiError ? err.message : String(err))
+      );
+    }
+  }, [tab, loadTeam]);
+
+  // Isi formulir kelengkapan begitu data penugasan termuat.
+  useEffect(() => {
+    if (!eng) return;
+    setScope(eng.scope ?? "");
+    setPeriodStart(eng.period_start ?? "");
+    setPeriodEnd(eng.period_end ?? "");
+    setKbShareable(eng.kb_shareable ?? true);
+  }, [eng]);
 
   async function handleReparse(uploadId: number) {
     setReparsingId(uploadId);
@@ -484,10 +523,14 @@ export default function EngagementDetailPage() {
 
   const summary = eng?.exec_summary;
 
-  const TABS: { key: "files" | "findings" | "summary"; label: string }[] = [
+  const TABS: {
+    key: "files" | "findings" | "summary" | "team";
+    label: string;
+  }[] = [
     { key: "files", label: t("tab.files") },
     { key: "findings", label: `${t("tab.findings")} (${findings.length})` },
     { key: "summary", label: t("tab.summary") },
+    { key: "team", label: t("tab.team") },
   ];
 
   return (
@@ -1335,6 +1378,184 @@ export default function EngagementDetailPage() {
           </p>
         )}
       </section>
+      )}
+
+      {tab === "team" && (
+        <>
+          <section className="card">
+            <h3 style={{ marginTop: 0 }}>{t("team.title")}</h3>
+            <p className="muted">{t("team.hint")}</p>
+            {members.length === 0 ? (
+              <p className="muted">{t("team.empty")}</p>
+            ) : (
+              <div className="table-wrap">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>{t("team.name")}</th>
+                      <th>{t("team.email")}</th>
+                      <th>{t("team.role")}</th>
+                      <th>{t("team.roleInTeam")}</th>
+                      <th />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {members.map((m) => (
+                      <tr key={m.user_id}>
+                        <td>{m.full_name}</td>
+                        <td className="mono">{m.email}</td>
+                        <td className="mono">{m.role}</td>
+                        <td className="mono">{m.role_in_team}</td>
+                        <td>
+                          {canApprove && (
+                            <button
+                              className="btn secondary"
+                              onClick={() => {
+                                setTeamMsg(null);
+                                setError(null);
+                                api
+                                  .removeMember(id, m.user_id)
+                                  .then(() => loadTeam())
+                                  .catch((err) =>
+                                    setError(
+                                      err instanceof ApiError
+                                        ? err.message
+                                        : String(err)
+                                    )
+                                  );
+                              }}
+                            >
+                              {t("team.remove")}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {canApprove ? (
+              <div className="form-row" style={{ marginTop: 12 }}>
+                <label className="field">
+                  <span>{t("team.pickUser")}</span>
+                  <select
+                    value={pickUser}
+                    onChange={(e) => setPickUser(e.target.value)}
+                  >
+                    <option value="">—</option>
+                    {allUsers
+                      .filter((u) => !members.some((m) => m.user_id === u.id))
+                      .map((u) => (
+                        <option key={u.id} value={String(u.id)}>
+                          {u.full_name} ({u.role})
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                <button
+                  className="btn"
+                  disabled={!pickUser}
+                  onClick={() => {
+                    setTeamMsg(null);
+                    setError(null);
+                    api
+                      .addMember(id, Number(pickUser))
+                      .then(() => {
+                        setPickUser("");
+                        return loadTeam();
+                      })
+                      .catch((err) =>
+                        setError(
+                          err instanceof ApiError ? err.message : String(err)
+                        )
+                      );
+                  }}
+                >
+                  {t("team.add")}
+                </button>
+              </div>
+            ) : (
+              <p className="muted">{t("team.forbidden")}</p>
+            )}
+          </section>
+
+          <section className="card">
+            <h3 style={{ marginTop: 0 }}>{t("det.title")}</h3>
+            <p className="muted">{t("det.hint")}</p>
+            <div className="form-row">
+              <label className="field">
+                <span>{t("det.periodStart")}</span>
+                <input
+                  type="date"
+                  value={periodStart}
+                  onChange={(e) => setPeriodStart(e.target.value)}
+                />
+              </label>
+              <label className="field">
+                <span>{t("det.periodEnd")}</span>
+                <input
+                  type="date"
+                  value={periodEnd}
+                  onChange={(e) => setPeriodEnd(e.target.value)}
+                />
+              </label>
+            </div>
+            <label className="field" style={{ marginTop: 8 }}>
+              <span>{t("det.scope")}</span>
+              <textarea
+                rows={3}
+                value={scope}
+                placeholder={t("det.scopePlaceholder")}
+                onChange={(e) => setScope(e.target.value)}
+              />
+            </label>
+            <label
+              style={{
+                display: "flex",
+                gap: 8,
+                alignItems: "center",
+                marginTop: 8,
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={kbShareable}
+                onChange={(e) => setKbShareable(e.target.checked)}
+              />
+              <span>{t("det.kbShareable")}</span>
+            </label>
+            {canApprove && (
+              <button
+                className="btn"
+                style={{ marginTop: 12 }}
+                onClick={() => {
+                  setTeamMsg(null);
+                  setError(null);
+                  api
+                    .saveEngagementDetails(id, {
+                      scope: scope || null,
+                      period_start: periodStart || null,
+                      period_end: periodEnd || null,
+                      kb_shareable: kbShareable,
+                    })
+                    .then(() => {
+                      setTeamMsg(t("det.saved"));
+                      return refresh();
+                    })
+                    .catch((err) =>
+                      setError(
+                        err instanceof ApiError ? err.message : String(err)
+                      )
+                    );
+                }}
+              >
+                {t("det.save")}
+              </button>
+            )}
+            {teamMsg && <div className="alert ok">{teamMsg}</div>}
+          </section>
+        </>
       )}
     </AppShell>
   );

@@ -80,6 +80,11 @@ export interface EngagementDetail extends Engagement {
   exec_summary: ExecSummary | null;
   baseline_hours: number | null;
   baseline_note: string | null;
+  // --- Modul 2: kelengkapan penugasan ---
+  scope: string | null;
+  period_start: string | null;
+  period_end: string | null;
+  kb_shareable: boolean;
 }
 export interface ScanUpload {
   id: number;
@@ -406,6 +411,42 @@ export const setBaseline = (
       body: JSON.stringify({ baseline_hours, baseline_note }),
     }
   );
+
+// ---------- Modul 2: anggota tim & kelengkapan penugasan ----------
+export interface Member {
+  user_id: number;
+  email: string;
+  full_name: string;
+  /** Peran RBAC aplikasi: admin | auditor | analyst. */
+  role: string;
+  /** Peran di dalam tim: lead | member. */
+  role_in_team: string;
+}
+export interface EngagementDetails {
+  scope: string | null;
+  period_start: string | null;
+  period_end: string | null;
+  kb_shareable: boolean;
+}
+export const listMembers = (id: number) =>
+  req<Member[]>(`/engagements/${id}/members`);
+export const addMember = (id: number, user_id: number, role_in_team = "member") =>
+  req<Member>(`/engagements/${id}/members`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ user_id, role_in_team }),
+  });
+export const removeMember = (id: number, userId: number) =>
+  req<null>(`/engagements/${id}/members/${userId}`, { method: "DELETE" });
+export const saveEngagementDetails = (id: number, d: EngagementDetails) =>
+  req<EngagementDetails>(`/engagements/${id}/details`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(d),
+  });
+// Belum ada fungsi apa pun untuk /users di klien ini — dropdown anggota
+// membutuhkannya, jadi ditambahkan di sini.
+export const listUsers = () => req<User[]>("/users");
 
 // ---------- Pusat Ingest ----------
 export interface IngestItem {
