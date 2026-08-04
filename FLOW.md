@@ -25,7 +25,18 @@ Untuk mencoba semua fitur, pakai akun **admin**.
 **1. Buat penugasan.**
 Analis membuat sebuah penugasan (proyek audit) sebagai wadah untuk satu klien.
 → **Buka:** sidebar **Penugasan** → isi form **"Buat Penugasan Baru"** (nama + klien) → **Buat**.
-Penugasan baru muncul di **Daftar Penugasan**.
+Penugasan baru muncul di **Daftar Penugasan**. Pembuatnya otomatis menjadi anggota tim
+penugasan itu.
+
+**1b. Lengkapi tim, periode, dan cakupan.**
+Tentukan siapa saja yang boleh membuka penugasan ini, kapan pengujian dilaksanakan, dan apa
+saja yang diuji. **Hanya anggota tim yang dapat membuka sebuah penugasan** — administrator
+selalu bisa. Periode dan cakupan ikut tercetak di kop laporan akhir.
+→ **Buka:** tab **Tim** → pilih pengguna pada **"Pilih pengguna"** → **Tambah Anggota**;
+lalu isi **Mulai**, **Selesai**, dan **Cakupan pengujian** → **Simpan Kelengkapan**.
+Menambah/mengeluarkan anggota hanya boleh oleh **auditor/admin**; anggota terakhir tidak
+dapat dikeluarkan. Saklar **"Boleh jadi rujukan Basis Pengetahuan"** dimatikan bila kontrak
+klien melarang datanya dipakai untuk penugasan lain.
 
 **2. Masukkan berkas keluaran perkakas.**
 Analis mengunggah berkas hasil pemindaian (Nuclei, ZAP, Nmap, Burp, atau SARIF). Berkas mentah
@@ -81,7 +92,12 @@ Auditor membaca naratif (bagian AI ditandai), **menyunting bila perlu**, mengonf
 positif palsu, lalu menetapkan status. Bukti bisa dilampirkan.
 → **Buka:** tab **Temuan** → klik **badge status** (atau kartu di mode Kanban) sebuah temuan →
 panel review: **Sunting** naratif, **Setujui / Tolak / Tandai False Positive**, **Lampiran
-Bukti**, **Riwayat**.
+Bukti**, **Riwayat**, **Perbandingan**.
+
+Tombol **Perbandingan** menampilkan seberapa banyak naratif diubah auditor dari draf AI:
+porsi kata yang berubah per bagian (deskripsi/dampak/rekomendasi) beserta kata yang
+ditambahkan dan dihapus. Angka inilah bukti terukur untuk indikator *"maksimal 30% kalimat
+memerlukan penyuntingan berat"*.
 
 **10. Terbitkan laporan.**
 Sistem merakit laporan **hanya dari temuan disetujui** (naratif final auditor menang atas draf
@@ -124,7 +140,16 @@ menahan angka penghematannya, bukan mengklaim 100%.
 - **Auditor** — meninjau, menyunting, dan **menyetujui/menolak/menandai positif palsu**;
   menerbitkan laporan. **Pemegang keputusan akhir.**
 - **Administrator** — mengelola pengguna & peran, mengatur konfigurasi LLM (panel Admin), dan
-  memantau jejak audit.
+  memantau jejak audit. **Melihat seluruh penugasan** tanpa perlu terdaftar sebagai anggota.
+
+**Keanggotaan tim menentukan siapa melihat apa.** Selain administrator, seorang pengguna
+hanya melihat penugasan tempat ia terdaftar — termasuk di daftar penugasan, dasbor, halaman
+**Laporan**, dan **Ingest**. Membuka penugasan orang lain lewat URL langsung dibalas
+*"tak ditemukan"*, bukan *"akses ditolak"*: memberi tahu bahwa penugasan bernomor itu ada
+sudah membocorkan informasi, karena nama klien kerap dapat ditebak dari nomor berurutan.
+
+Menambah atau mengeluarkan anggota hanya boleh **auditor/admin** — memberi seseorang akses
+ke data kerentanan klien adalah keputusan kepercayaan, bukan pekerjaan analisis harian.
 
 Pembatasan akses bersifat *fail-closed*: status persetujuan hanya bisa diubah auditor/admin;
 analis hanya boleh menyunting dan mengajukan.
