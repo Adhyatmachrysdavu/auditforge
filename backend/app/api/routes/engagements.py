@@ -15,8 +15,9 @@ from app.core.storage import get_bytes, put_bytes, remove_object
 from app.db.session import get_db
 from app.eval.engagement_eval import evaluate_engagement
 from app.eval.timing import timing_summary
+from app.ingest.rules import can_reparse, is_duplicate, sha256_of
 from app.models.engagement import Engagement
-from app.models.enums import ScanTool
+from app.models.enums import ScanTool, UploadStatus
 from app.models.finding import Finding, FindingAttachment, FindingRevision
 from app.models.scan_upload import ScanUpload
 from app.models.user import User
@@ -129,6 +130,34 @@ async def upload_scan(
     _get_engagement(db, engagement_id)
     content = await file.read()
 
+    # Tolak berkas yang isinya sudah pernah BERHASIL diurai di penugasan ini.
+    # Yang dulu gagal tidak masuk himpunan ini, jadi tetap boleh dikirim ulang.
+    content_hash = sha256_of(content)
+    parsed_hashes = set(
+        db.scalars(
+            select(ScanUpload.content_hash).where(
+                ScanUpload.engagement_id == engagement_id,
+                ScanUpload.status == UploadStatus.parsed.value,
+                ScanUpload.content_hash.is_not(None),
+            )
+        ).all()
+    )
+    if is_duplicate(content_hash=content_hash, parsed_hashes=parsed_hashes):
+        existing = db.scalar(
+            select(ScanUpload).where(
+                ScanUpload.engagement_id == engagement_id,
+                ScanUpload.content_hash == content_hash,
+                ScanUpload.status == UploadStatus.parsed.value,
+            )
+        )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Berkas dengan isi identik sudah diserap "
+                f"(unggahan #{existing.id if existing else '?'})."
+            ),
+        )
+
     safe_name = (file.filename or "berkas").replace("/", "_").replace("\\", "_")
     tool_val = tool if tool in {t.value for t in ScanTool} else ScanTool.unknown.value
     key = f"uploads/{engagement_id}/{uuid.uuid4().hex}_{safe_name}"
@@ -140,6 +169,7 @@ async def upload_scan(
         tool=tool_val,
         storage_key=key,
         uploaded_by=user.id,
+        content_hash=content_hash,
     )
     db.add(upload)
     db.commit()

@@ -11,6 +11,7 @@ from app.core.config import get_settings
 from app.core.storage import get_bytes, put_bytes
 from app.db.session import SessionLocal
 from app.enrichment import enrich
+from app.ingest.rules import is_duplicate, sha256_of
 from app.ingest.watcher import iter_inbox_files, move_result
 from app.models.engagement import Engagement
 from app.models.enums import UploadStatus
@@ -302,6 +303,22 @@ def _ingest_watched_file(db: Session, engagement_id: int, path: str, name: str) 
     """
     with open(path, "rb") as fh:
         content = fh.read()
+
+    # Berkas identik yang sudah berhasil diserap: pindahkan ke processed/ tanpa
+    # memproses ulang. Ini bukan kegagalan, jadi jangan masuk failed/.
+    content_hash = sha256_of(content)
+    parsed_hashes = set(
+        db.scalars(
+            select(ScanUpload.content_hash).where(
+                ScanUpload.engagement_id == engagement_id,
+                ScanUpload.status == UploadStatus.parsed.value,
+                ScanUpload.content_hash.is_not(None),
+            )
+        ).all()
+    )
+    if is_duplicate(content_hash=content_hash, parsed_hashes=parsed_hashes):
+        return True
+
     safe = name.replace("/", "_").replace("\\", "_")
     key = f"uploads/{engagement_id}/{uuid.uuid4().hex}_{safe}"
     put_bytes(key, content)
@@ -311,6 +328,7 @@ def _ingest_watched_file(db: Session, engagement_id: int, path: str, name: str) 
         tool="unknown",  # deteksi perkakas otomatis via sniff() saat parse
         storage_key=key,
         uploaded_by=None,  # None = ingest otomatis (bukan aksi pengguna)
+        content_hash=content_hash,
     )
     db.add(upload)
     db.commit()
