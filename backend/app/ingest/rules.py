@@ -17,8 +17,18 @@ Dua keputusan yang menentukan apakah sebuah berkas boleh diproses:
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Iterable
+from typing import Any, Protocol
 
 _REPARSEABLE = "failed"
+_PARSED = "parsed"
+
+
+class _UploadRow(Protocol):
+    """Bentuk minimal baris unggahan yang dibutuhkan aturan duplikat."""
+
+    status: str
+    content_hash: str | None
 
 
 def sha256_of(content: bytes) -> str:
@@ -43,3 +53,35 @@ def is_duplicate(*, content_hash: str | None, parsed_hashes: set[str]) -> bool:
     if not content_hash:
         return False  # berkas lama tanpa hash: jangan pernah dianggap duplikat
     return content_hash in parsed_hashes
+
+
+def parsed_hashes_from(rows: Iterable[_UploadRow]) -> set[str]:
+    """Himpunan hash dari baris yang BERHASIL diurai saja.
+
+    Penyaringan status sengaja hidup di sini, bukan di SQL: inilah separuh aturan
+    yang menanggung beban — berkas yang dulu gagal tidak boleh menghalangi
+    pengiriman ulang — sehingga ia harus dapat diuji tanpa basis data.
+    """
+    return {
+        row.content_hash
+        for row in rows
+        if row.status == _PARSED and row.content_hash
+    }
+
+
+def parsed_duplicate_of(
+    rows: Iterable[_UploadRow], *, content_hash: str | None
+) -> Any | None:
+    """Baris `parsed` pertama yang isinya identik; None bila bukan duplikat.
+
+    Mengembalikan barisnya (bukan sekadar bool) agar pesan galat dapat menyebut
+    unggahan mana yang sudah memuat isi tersebut.
+    """
+    candidates = [
+        row for row in rows if row.status == _PARSED and row.content_hash
+    ]
+    if not is_duplicate(
+        content_hash=content_hash, parsed_hashes=parsed_hashes_from(candidates)
+    ):
+        return None
+    return next(row for row in candidates if row.content_hash == content_hash)
