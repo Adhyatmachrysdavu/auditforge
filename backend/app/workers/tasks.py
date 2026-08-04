@@ -236,6 +236,10 @@ def generate_exec_summary(engagement_id: int, lang: str = "id") -> dict:
             }
 
         eng.exec_summary = es.as_dict()
+        # Catat berapa temuan yang menjadi dasar ringkasan ini. Bila kelak
+        # jumlahnya berbeda, laporan dapat memperingatkan bahwa ringkasannya
+        # sudah tidak sesuai isi — bukan diam-diam membantah tabel temuan.
+        eng.exec_summary_finding_count = len(rows)
         eng.exec_summary_generated = True
         eng.exec_summary_model = es.model[:64]
         eng.exec_summary_prompt_version = SUMMARY_PROMPT_VERSION

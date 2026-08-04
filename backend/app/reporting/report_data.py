@@ -45,6 +45,10 @@ class ReportData:
     summary_key_risks: str
     summary_recommendations: str
     severity_counts: dict[str, int]
+    # Peringatan bila ringkasan eksekutif dibuat saat jumlah temuan masih berbeda.
+    # Tanpa ini laporan bisa membuka dengan "terdapat 4 temuan" lalu menampilkan
+    # tabel berisi 3 — membantah dirinya sendiri di depan klien.
+    summary_stale_note: str | None = None
     findings: list[ReportFinding] = field(default_factory=list)
 
     @property
@@ -86,8 +90,15 @@ def build_report_data(
     report_title: str,
     include: str = "approved",
     exec_summary: dict[str, object] | None = None,
+    summary_finding_count: int | None = None,
 ) -> ReportData:
-    """Susun `ReportData`. `include`: 'approved' (default) atau 'all'."""
+    """Susun `ReportData`. `include`: 'approved' (default) atau 'all'.
+
+    `summary_finding_count` adalah jumlah temuan pada saat ringkasan eksekutif
+    disusun AI. Bila kini berbeda, laporan memuat peringatan bahwa ringkasan
+    perlu dibuat ulang — ringkasan adalah snapshot dan tidak ikut berubah saat
+    temuan bertambah atau statusnya berpindah.
+    """
     selected = (
         list(findings)
         if include == "all"
@@ -124,6 +135,18 @@ def build_report_data(
             )
         )
 
+    # Ringkasan hanya bisa dinyatakan basi bila ia memang ada DAN jumlah temuan
+    # saat pembuatannya tercatat. Ringkasan lama (sebelum kolom pencatat ada)
+    # tidak boleh dituduh basi hanya karena angkanya tak diketahui.
+    stale_note: str | None = None
+    current_count = len(findings)
+    if es and summary_finding_count is not None and summary_finding_count != current_count:
+        stale_note = (
+            f"Ringkasan eksekutif ini disusun saat penugasan memiliki "
+            f"{summary_finding_count} temuan; kini terdapat {current_count}. "
+            f"Buat ulang ringkasan agar sesuai dengan isi laporan."
+        )
+
     return ReportData(
         org_name=org_name,
         report_title=report_title,
@@ -138,4 +161,5 @@ def build_report_data(
         ),
         severity_counts={k: v for k, v in sev_counts.items() if v},
         findings=report_findings,
+        summary_stale_note=stale_note,
     )

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, utcnow
@@ -26,6 +26,10 @@ class Engagement(Base):
     exec_summary_prompt_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
     # {overview, key_risks, recommendations, posture} hasil draf AI (auditor menyunting)
     exec_summary: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # Jumlah temuan saat ringkasan disusun. Ringkasan adalah snapshot dan tidak
+    # ikut berubah saat temuan bertambah; angka ini yang membuat laporan bisa
+    # memperingatkan bahwa ringkasannya sudah tidak sesuai isi.
+    exec_summary_finding_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # --- Modul 1: baseline pembanding waktu penyusunan manual ---
     # Diisi manusia; sistem tak punya cara mengetahuinya sendiri. Kosong = tak
     # ada klaim penghematan.

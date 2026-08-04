@@ -67,6 +67,9 @@ _TEMPLATE = """<!doctype html>
   .evi img { max-width: 460px; max-height: 320px; border: 1px solid #cbd5e1;
     border-radius: 6px; margin: 4px 6px 0 0; }
   .muted { color: #94a3b8; }
+  /* Peringatan ringkasan basi: harus terlihat, tapi tidak menyaingi isi laporan. */
+  .stale-note { background: #fef3c7; border-left: 3px solid #d97706;
+                padding: 6px 10px; color: #92400e; font-size: 0.92em; }
 </style></head><body>
   <div class="org">{{ data.org_name }}</div>
   <h1>{{ data.report_title }}</h1>
@@ -84,6 +87,7 @@ _TEMPLATE = """<!doctype html>
 
   {% if data.summary_overview or data.summary_key_risks or data.summary_recommendations %}
   <h2>{{ L.exec_summary }}</h2>
+  {% if data.summary_stale_note %}<p class="stale-note">⚠ {{ data.summary_stale_note }}</p>{% endif %}
   {% if data.summary_overview %}<p><span class="lbl">{{ L.overview }}:</span> {{ data.summary_overview }}</p>{% endif %}
   {% if data.summary_key_risks %}<p><span class="lbl">{{ L.key_risks }}:</span> {{ data.summary_key_risks }}</p>{% endif %}
   {% if data.summary_recommendations %}<p><span class="lbl">{{ L.recommendations }}:</span> {{ data.summary_recommendations }}</p>{% endif %}

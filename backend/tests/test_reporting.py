@@ -103,3 +103,48 @@ def test_render_html_contains_charts_and_findings():
     assert "<svg" in html  # grafik tersemat
     assert "XSS" in html and "Judul" in html
     assert "Matriks Risiko" in html  # label ID
+
+
+# --- Peringatan ringkasan eksekutif basi ----------------------------------
+
+
+def test_stale_note_when_finding_count_changed():
+    # Ringkasan dibuat saat ada 2 temuan; kini 3. Laporan harus menyatakan itu,
+    # supaya paragraf ringkasan tidak diam-diam membantah tabel temuannya.
+    fs = [_f(status="approved"), _f(status="approved"), _f(status="draft")]
+    d = build_report_data(
+        _eng(), fs, org_name="O", report_title="J",
+        exec_summary={"overview": "ada 2 temuan"},
+        summary_finding_count=2,
+    )
+    assert d.summary_stale_note is not None
+    assert "2" in d.summary_stale_note and "3" in d.summary_stale_note
+
+
+def test_no_stale_note_when_count_matches():
+    fs = [_f(status="approved"), _f(status="draft")]
+    d = build_report_data(
+        _eng(), fs, org_name="O", report_title="J",
+        exec_summary={"overview": "ada 2 temuan"},
+        summary_finding_count=2,
+    )
+    assert d.summary_stale_note is None
+
+
+def test_no_stale_note_without_exec_summary():
+    # Tanpa ringkasan tak ada yang bisa basi — jangan munculkan peringatan.
+    fs = [_f(status="approved")]
+    d = build_report_data(
+        _eng(), fs, org_name="O", report_title="J", summary_finding_count=99
+    )
+    assert d.summary_stale_note is None
+
+
+def test_no_stale_note_when_count_unknown():
+    # Ringkasan lama yang dibuat sebelum kolom pencatat ada: jangan menuduh basi.
+    fs = [_f(status="approved")]
+    d = build_report_data(
+        _eng(), fs, org_name="O", report_title="J",
+        exec_summary={"overview": "x"}, summary_finding_count=None,
+    )
+    assert d.summary_stale_note is None

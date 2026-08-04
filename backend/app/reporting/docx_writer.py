@@ -111,6 +111,12 @@ def render_docx(data: ReportData, *, accent: str = "#1E5F9F", lang: str = "id") 
     # --- Ringkasan eksekutif ---
     if data.summary_overview or data.summary_key_risks or data.summary_recommendations:
         _heading(doc, t["exec_summary"], ac, level=1)
+        if data.summary_stale_note:
+            # Ditulis sebelum isi ringkasan agar pembaca tahu duluan bahwa
+            # angka di paragraf berikutnya mungkin tak lagi sesuai tabel temuan.
+            warn = doc.add_paragraph()
+            run = warn.add_run(f"⚠ {data.summary_stale_note}")
+            run.italic = True
         if data.summary_overview:
             _labelled(doc, t["overview"], data.summary_overview)
         if data.summary_key_risks:
