@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, Upl
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.access import can_access_engagement
 from app.api.deps import get_current_user, require_roles
 from app.core.storage import get_bytes, put_bytes, remove_object
 from app.db.session import get_db
@@ -18,6 +19,7 @@ from app.eval.timing import timing_summary
 from app.ingest.dedup import find_parsed_duplicate
 from app.ingest.rules import can_reparse, sha256_of
 from app.models.engagement import Engagement
+from app.models.engagement_member import EngagementMember
 from app.models.enums import ScanTool, UploadStatus
 from app.models.finding import Finding, FindingAttachment, FindingRevision
 from app.models.scan_upload import ScanUpload
@@ -50,9 +52,34 @@ from app.workers.tasks import generate_exec_summary, generate_narrative, parse_u
 router = APIRouter(prefix="/engagements", tags=["engagements"])
 
 
-def _get_engagement(db: Session, engagement_id: int) -> Engagement:
+def _is_member(db: Session, engagement_id: int, user_id: int) -> bool:
+    """True bila pengguna terdaftar sebagai anggota tim penugasan tersebut."""
+    return (
+        db.scalar(
+            select(EngagementMember.id).where(
+                EngagementMember.engagement_id == engagement_id,
+                EngagementMember.user_id == user_id,
+            )
+        )
+        is not None
+    )
+
+
+def _get_engagement(db: Session, engagement_id: int, user: User) -> Engagement:
+    """Ambil penugasan yang boleh diakses `user`, atau 404.
+
+    Penugasan yang ada tetapi bukan hak pengguna sengaja dibalas 404, bukan 403:
+    403 membocorkan bahwa penugasan bernomor itu ada, dan nama klien kerap dapat
+    ditebak dari nomor yang berurutan.
+    """
     eng = db.get(Engagement, engagement_id)
     if eng is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Penugasan tak ditemukan")
+    allowed = can_access_engagement(
+        role=user.role.name,
+        is_member=_is_member(db, engagement_id, user.id),
+    )
+    if not allowed:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Penugasan tak ditemukan")
     return eng
 
@@ -97,23 +124,41 @@ def create_engagement(
     db.add(eng)
     db.commit()
     db.refresh(eng)
+
+    # Tanpa ini pembuatnya sendiri langsung kehilangan akses ke penugasan yang
+    # baru saja ia buat.
+    db.add(
+        EngagementMember(
+            engagement_id=eng.id,
+            user_id=user.id,
+            role_in_team="lead",
+            added_by=user.id,
+        )
+    )
+    db.commit()
     return _engagement_out(eng)
 
 
 @router.get("", response_model=list[EngagementOut])
 def list_engagements(
-    db: Session = Depends(get_db), _: User = Depends(get_current_user)
+    db: Session = Depends(get_db), user: User = Depends(get_current_user)
 ) -> list[EngagementOut]:
-    return [_engagement_out(e) for e in db.scalars(select(Engagement)).all()]
+    """Hanya penugasan yang boleh diakses pengguna. Admin melihat semua."""
+    q = select(Engagement)
+    if user.role.name != "admin":
+        q = q.join(
+            EngagementMember, EngagementMember.engagement_id == Engagement.id
+        ).where(EngagementMember.user_id == user.id)
+    return [_engagement_out(e) for e in db.scalars(q).all()]
 
 
 @router.get("/{engagement_id}", response_model=EngagementDetailOut)
 def get_engagement(
     engagement_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ) -> EngagementDetailOut:
-    e = _get_engagement(db, engagement_id)
+    e = _get_engagement(db, engagement_id, user)
     return EngagementDetailOut(
         id=e.id,
         name=e.name,
@@ -142,7 +187,7 @@ async def upload_scan(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> ScanUploadOut:
-    _get_engagement(db, engagement_id)
+    _get_engagement(db, engagement_id, user)
     content = await file.read()
 
     # Tolak berkas yang isinya sudah pernah BERHASIL diurai di penugasan ini.
@@ -200,9 +245,9 @@ async def upload_scan(
 def list_uploads(
     engagement_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ) -> list[ScanUploadOut]:
-    _get_engagement(db, engagement_id)
+    _get_engagement(db, engagement_id, user)
     rows = db.scalars(
         select(ScanUpload).where(ScanUpload.engagement_id == engagement_id)
     ).all()
@@ -216,14 +261,14 @@ def reparse_upload(
     engagement_id: int,
     upload_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("analyst", "auditor", "admin")),
+    user: User = Depends(require_roles("analyst", "auditor", "admin")),
 ) -> ScanUploadOut:
     """Urai ulang berkas yang gagal, memakai berkas mentah yang masih tersimpan.
 
     Bukan keputusan persetujuan melainkan pemrosesan berkas, sehingga analis
     juga berwenang — setara dengan hak mengunggah yang sudah dimilikinya.
     """
-    _get_engagement(db, engagement_id)
+    _get_engagement(db, engagement_id, user)
     upload = db.get(ScanUpload, upload_id)
     if upload is None or upload.engagement_id != engagement_id:
         raise HTTPException(
@@ -278,9 +323,9 @@ def reparse_upload(
 def list_findings(
     engagement_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ) -> list[FindingOut]:
-    _get_engagement(db, engagement_id)
+    _get_engagement(db, engagement_id, user)
     rows = db.scalars(
         select(Finding).where(Finding.engagement_id == engagement_id).order_by(Finding.id)
     ).all()
@@ -354,9 +399,9 @@ def get_finding(
     engagement_id: int,
     finding_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ) -> FindingDetailOut:
-    _get_engagement(db, engagement_id)
+    _get_engagement(db, engagement_id, user)
     f = _get_finding(db, engagement_id, finding_id)
     return _finding_detail(f)
 
@@ -367,10 +412,10 @@ def generate_narratives(
     only_missing: bool = True,
     lang: str = "id",
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ) -> NarrativeJobOut:
     """Antrekan pembuatan draf naratif AI untuk temuan (async, per-temuan)."""
-    _get_engagement(db, engagement_id)
+    _get_engagement(db, engagement_id, user)
     rows = db.scalars(
         select(Finding).where(Finding.engagement_id == engagement_id)
     ).all()
@@ -389,10 +434,10 @@ def queue_exec_summary(
     engagement_id: int,
     lang: str = "id",
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ) -> SummaryJobOut:
     """Antrekan pembuatan draf ringkasan eksekutif AI untuk penugasan (async)."""
-    _get_engagement(db, engagement_id)
+    _get_engagement(db, engagement_id, user)
     n = db.scalar(
         select(func.count()).select_from(Finding).where(
             Finding.engagement_id == engagement_id
@@ -406,10 +451,10 @@ def queue_exec_summary(
 def recompute_triage(
     engagement_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ) -> TriageResultOut:
     """Hitung ulang prioritas deterministik semua temuan (sinkron, cepat)."""
-    _get_engagement(db, engagement_id)
+    _get_engagement(db, engagement_id, user)
     rows = db.scalars(
         select(Finding).where(Finding.engagement_id == engagement_id)
     ).all()
@@ -473,7 +518,7 @@ def edit_narrative(
 
     Menandai `narrative_edited` dan mencatat revisi. Tak mengubah status.
     """
-    _get_engagement(db, engagement_id)
+    _get_engagement(db, engagement_id, user)
     f = _get_finding(db, engagement_id, finding_id)
     narrative = {
         "description": payload.description.strip(),
@@ -501,7 +546,7 @@ def change_status(
     user: User = Depends(get_current_user),
 ) -> FindingDetailOut:
     """Pindahkan status temuan mengikuti mesin status + batas persetujuan peran."""
-    _get_engagement(db, engagement_id)
+    _get_engagement(db, engagement_id, user)
     f = _get_finding(db, engagement_id, finding_id)
     target = payload.status
     if not is_valid_status(target):
@@ -536,10 +581,10 @@ def list_revisions(
     engagement_id: int,
     finding_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ) -> list[FindingRevisionOut]:
     """Riwayat revisi naratif & status temuan (terbaru dahulu)."""
-    _get_engagement(db, engagement_id)
+    _get_engagement(db, engagement_id, user)
     _get_finding(db, engagement_id, finding_id)
     rows = db.scalars(
         select(FindingRevision)
@@ -586,9 +631,9 @@ def list_attachments(
     engagement_id: int,
     finding_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ) -> list[AttachmentOut]:
-    _get_engagement(db, engagement_id)
+    _get_engagement(db, engagement_id, user)
     _get_finding(db, engagement_id, finding_id)
     rows = db.scalars(
         select(FindingAttachment)
@@ -611,7 +656,7 @@ async def upload_attachment(
     user: User = Depends(require_roles("analyst", "auditor", "admin")),
 ) -> AttachmentOut:
     """Unggah lampiran bukti sebuah temuan ke MinIO."""
-    _get_engagement(db, engagement_id)
+    _get_engagement(db, engagement_id, user)
     f = _get_finding(db, engagement_id, finding_id)
     content = await file.read()
     if len(content) > _MAX_EVIDENCE_BYTES:
@@ -641,10 +686,10 @@ def download_attachment(
     finding_id: int,
     attachment_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ) -> Response:
     """Unduh berkas lampiran (stream byte dari MinIO)."""
-    _get_engagement(db, engagement_id)
+    _get_engagement(db, engagement_id, user)
     _get_finding(db, engagement_id, finding_id)
     a = db.get(FindingAttachment, attachment_id)
     if a is None or a.finding_id != finding_id:
@@ -666,10 +711,10 @@ def delete_attachment(
     finding_id: int,
     attachment_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("analyst", "auditor", "admin")),
+    user: User = Depends(require_roles("analyst", "auditor", "admin")),
 ) -> Response:
     """Hapus lampiran bukti (baris DB + objek MinIO)."""
-    _get_engagement(db, engagement_id)
+    _get_engagement(db, engagement_id, user)
     _get_finding(db, engagement_id, finding_id)
     a = db.get(FindingAttachment, attachment_id)
     if a is None or a.finding_id != finding_id:
@@ -712,7 +757,7 @@ def _assemble_report(
     db: Session, engagement_id: int, include: str, *, with_evidence: bool
 ) -> tuple[ReportData, object]:
     """Susun ReportData + branding; sematkan bukti gambar bila diminta."""
-    eng = _get_engagement(db, engagement_id)
+    eng = _get_engagement(db, engagement_id, user)
     findings = db.scalars(
         select(Finding).where(Finding.engagement_id == engagement_id)
     ).all()
@@ -740,10 +785,10 @@ def _safe_name(name: str | None) -> str:
 def engagement_evaluation(
     engagement_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ) -> dict:
     """Metrik evaluasi terukur (efisiensi dedup, cakupan AI, kemajuan review) — D17."""
-    _get_engagement(db, engagement_id)
+    _get_engagement(db, engagement_id, user)
     rows = db.scalars(
         select(Finding).where(Finding.engagement_id == engagement_id)
     ).all()
@@ -754,10 +799,10 @@ def engagement_evaluation(
 def engagement_timing(
     engagement_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ) -> dict:
     """Metrik waktu penyusunan laporan (Modul 1) dari jejak revisi temuan."""
-    eng = _get_engagement(db, engagement_id)
+    eng = _get_engagement(db, engagement_id, user)
     # Hanya dua kolom yang dipakai; menarik baris ORM utuh ikut membawa blob
     # JSON `narrative` tiap revisi tanpa alasan.
     rows = db.execute(
@@ -783,14 +828,14 @@ def set_engagement_baseline(
     engagement_id: int,
     payload: BaselineIn,
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("auditor", "admin")),
+    user: User = Depends(require_roles("auditor", "admin")),
 ) -> dict:
     """Isi angka pembanding waktu penyusunan manual (Modul 1).
 
     Hanya auditor/admin: angka ini menjadi dasar klaim penghematan pada laporan
     evaluasi, sehingga bukan pekerjaan analisis harian.
     """
-    eng = _get_engagement(db, engagement_id)
+    eng = _get_engagement(db, engagement_id, user)
     eng.baseline_hours = payload.baseline_hours
     eng.baseline_note = payload.baseline_note
     db.commit()
@@ -806,7 +851,7 @@ def download_report_docx(
     include: str = "approved",
     lang: str = "id",
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ) -> Response:
     """Unduh laporan DOCX (default: hanya temuan disetujui; `include=all` untuk semua)."""
     data, brand = _assemble_report(db, engagement_id, include, with_evidence=False)
@@ -828,7 +873,7 @@ def preview_report_html(
     include: str = "approved",
     lang: str = "id",
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ) -> Response:
     """Pratinjau laporan sebagai HTML (charts + bukti gambar tersemat)."""
     data, brand = _assemble_report(db, engagement_id, include, with_evidence=True)
@@ -842,7 +887,7 @@ def download_report_pdf(
     include: str = "approved",
     lang: str = "id",
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ) -> Response:
     """Unduh laporan PDF (WeasyPrint) — charts house-style + bukti gambar tersemat."""
     data, brand = _assemble_report(db, engagement_id, include, with_evidence=True)
