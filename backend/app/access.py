@@ -17,3 +17,12 @@ def can_access_engagement(*, role: str, is_member: bool) -> bool:
     if role == ADMIN_ROLE:
         return True
     return bool(is_member)
+
+
+def needs_engagement_filter(role: str) -> bool:
+    """True bila daftar/agregat perlu disaring untuk peran ini.
+
+    Dipisah agar route pemanggil tidak menuliskan `role != "admin"` sendiri-
+    sendiri lalu menyimpang diam-diam ketika aturannya kelak berubah.
+    """
+    return role != ADMIN_ROLE

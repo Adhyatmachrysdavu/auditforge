@@ -13,10 +13,12 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.access import needs_engagement_filter
 from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.ingest.rules import can_reparse
 from app.models.engagement import Engagement
+from app.models.engagement_member import EngagementMember
 from app.models.enums import UploadStatus
 from app.models.scan_upload import ScanUpload
 from app.models.user import User
@@ -30,10 +32,24 @@ def list_ingest(
     engagement_id: int | None = None,
     limit: int = 100,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ) -> dict:
-    """Aktivitas ingest terbaru lintas penugasan, terbaru lebih dulu."""
-    # TODO(Modul 2): saring berdasarkan keanggotaan tim setelah engagement_members ada.
+    """Aktivitas ingest terbaru lintas penugasan, terbaru lebih dulu.
+
+    Hanya penugasan yang boleh diakses pengguna. Daftar id kosong berarti nol
+    hasil, bukan seluruh data — itu bedanya fail-closed dengan fail-open pada
+    penyaringan berbasis daftar.
+    """
+    eng_ids: list[int] | None = None
+    if needs_engagement_filter(user.role.name):
+        eng_ids = list(
+            db.scalars(
+                select(EngagementMember.engagement_id).where(
+                    EngagementMember.user_id == user.id
+                )
+            ).all()
+        )
+
     q = (
         select(ScanUpload, Engagement.name)
         .join(Engagement, ScanUpload.engagement_id == Engagement.id)
@@ -44,6 +60,8 @@ def list_ingest(
         q = q.where(ScanUpload.status == status)
     if engagement_id is not None:
         q = q.where(ScanUpload.engagement_id == engagement_id)
+    if eng_ids is not None:
+        q = q.where(ScanUpload.engagement_id.in_(eng_ids))
 
     items = []
     for up, eng_name in db.execute(q).all():
@@ -67,17 +85,25 @@ def list_ingest(
         )
 
     since = datetime.now(UTC) - timedelta(days=1)
-    today = db.scalar(
+    q_today = (
         select(func.count())
         .select_from(ScanUpload)
         .where(ScanUpload.created_at >= since)
-    ) or 0
-    failed = db.scalar(
+    )
+    q_failed = (
         select(func.count())
         .select_from(ScanUpload)
         .where(ScanUpload.status == UploadStatus.failed.value)
-    ) or 0
-    total = db.scalar(select(func.count()).select_from(ScanUpload)) or 0
+    )
+    q_total = select(func.count()).select_from(ScanUpload)
+    if eng_ids is not None:
+        q_today = q_today.where(ScanUpload.engagement_id.in_(eng_ids))
+        q_failed = q_failed.where(ScanUpload.engagement_id.in_(eng_ids))
+        q_total = q_total.where(ScanUpload.engagement_id.in_(eng_ids))
+
+    today = db.scalar(q_today) or 0
+    failed = db.scalar(q_failed) or 0
+    total = db.scalar(q_total) or 0
 
     return {
         "items": items,

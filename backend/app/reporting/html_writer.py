@@ -14,6 +14,7 @@ from app.reporting.report_data import ReportData
 _LABELS = {
     "id": {
         "client": "Klien", "prepared_by": "Disiapkan oleh", "generated": "Dibuat",
+        "period": "Periode", "scope": "Cakupan",
         "posture": "Postur Keamanan", "exec_summary": "Ringkasan Eksekutif",
         "overview": "Gambaran Umum", "key_risks": "Risiko Utama",
         "recommendations": "Rekomendasi", "findings": "Temuan",
@@ -25,6 +26,7 @@ _LABELS = {
     },
     "en": {
         "client": "Client", "prepared_by": "Prepared by", "generated": "Generated",
+        "period": "Period", "scope": "Scope",
         "posture": "Security Posture", "exec_summary": "Executive Summary",
         "overview": "Overview", "key_risks": "Key Risks",
         "recommendations": "Recommendations", "findings": "Findings",
@@ -75,6 +77,8 @@ _TEMPLATE = """<!doctype html>
   <h1>{{ data.report_title }}</h1>
   <div class="meta"><strong>{{ data.engagement_name }}</strong></div>
   <div class="meta">{{ L.client }}: {{ data.client_name }}</div>
+  {% if data.period %}<div class="meta">{{ L.period }}: {{ data.period }}</div>{% endif %}
+  {% if data.scope %}<div class="meta">{{ L.scope }}: {{ data.scope }}</div>{% endif %}
   <div class="meta">{{ L.prepared_by }}: {{ data.org_name }}</div>
   <div class="meta">{{ L.generated }}: {{ data.generated_at }}</div>
   {% if data.posture %}<div class="meta">{{ L.posture }}:

@@ -182,6 +182,37 @@ def get_engagement(
     )
 
 
+@router.put("/{engagement_id}/details")
+def set_engagement_details(
+    engagement_id: int,
+    payload: EngagementDetailsIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles("auditor", "admin")),
+) -> dict:
+    """Isi periode pelaksanaan, cakupan pengujian, dan izin rujukan KB."""
+    eng = _get_engagement(db, engagement_id, user)
+    if (
+        payload.period_start is not None
+        and payload.period_end is not None
+        and payload.period_end < payload.period_start
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Akhir periode tidak boleh mendahului awal periode.",
+        )
+    eng.scope = payload.scope
+    eng.period_start = payload.period_start
+    eng.period_end = payload.period_end
+    eng.kb_shareable = payload.kb_shareable
+    db.commit()
+    return {
+        "scope": eng.scope,
+        "period_start": eng.period_start.isoformat() if eng.period_start else None,
+        "period_end": eng.period_end.isoformat() if eng.period_end else None,
+        "kb_shareable": eng.kb_shareable,
+    }
+
+
 def _member_out(m: EngagementMember, u: User) -> MemberOut:
     return MemberOut(
         user_id=u.id,
@@ -885,9 +916,13 @@ def _evidence_uris(db: Session, finding_id: int) -> list[str]:
 
 
 def _assemble_report(
-    db: Session, engagement_id: int, include: str, *, with_evidence: bool
+    db: Session, engagement_id: int, include: str, *, with_evidence: bool, user: User
 ) -> tuple[ReportData, object]:
-    """Susun ReportData + branding; sematkan bukti gambar bila diminta."""
+    """Susun ReportData + branding; sematkan bukti gambar bila diminta.
+
+    `user` diteruskan agar pemeriksaan keanggotaan tetap berlaku pada jalur
+    laporan — tanpa itu siapa pun bisa mengunduh laporan penugasan klien lain.
+    """
     eng = _get_engagement(db, engagement_id, user)
     findings = db.scalars(
         select(Finding).where(Finding.engagement_id == engagement_id)
@@ -985,7 +1020,7 @@ def download_report_docx(
     user: User = Depends(get_current_user),
 ) -> Response:
     """Unduh laporan DOCX (default: hanya temuan disetujui; `include=all` untuk semua)."""
-    data, brand = _assemble_report(db, engagement_id, include, with_evidence=False)
+    data, brand = _assemble_report(db, engagement_id, include, with_evidence=False, user=user)
     blob = render_docx(data, accent=brand.accent, lang=lang)
     return Response(
         content=blob,
@@ -1007,7 +1042,7 @@ def preview_report_html(
     user: User = Depends(get_current_user),
 ) -> Response:
     """Pratinjau laporan sebagai HTML (charts + bukti gambar tersemat)."""
-    data, brand = _assemble_report(db, engagement_id, include, with_evidence=True)
+    data, brand = _assemble_report(db, engagement_id, include, with_evidence=True, user=user)
     html = render_html(data, accent=brand.accent, lang=lang)
     return Response(content=html, media_type="text/html; charset=utf-8")
 
@@ -1021,7 +1056,7 @@ def download_report_pdf(
     user: User = Depends(get_current_user),
 ) -> Response:
     """Unduh laporan PDF (WeasyPrint) — charts house-style + bukti gambar tersemat."""
-    data, brand = _assemble_report(db, engagement_id, include, with_evidence=True)
+    data, brand = _assemble_report(db, engagement_id, include, with_evidence=True, user=user)
     html = render_html(data, accent=brand.accent, lang=lang)
     blob = render_pdf(html)
     return Response(

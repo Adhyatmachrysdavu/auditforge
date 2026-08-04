@@ -49,6 +49,9 @@ class ReportData:
     # Tanpa ini laporan bisa membuka dengan "terdapat 4 temuan" lalu menampilkan
     # tabel berisi 3 — membantah dirinya sendiri di depan klien.
     summary_stale_note: str | None = None
+    # --- Modul 2: kelengkapan penugasan yang dijanjikan proposal ---
+    period: str | None = None
+    scope: str | None = None
     findings: list[ReportFinding] = field(default_factory=list)
 
     @property
@@ -147,6 +150,11 @@ def build_report_data(
             f"Buat ulang ringkasan agar sesuai dengan isi laporan."
         )
 
+    # Periode dicetak sebagai satu kalimat agar kop laporan tetap ringkas.
+    ps = getattr(engagement, "period_start", None)
+    pe = getattr(engagement, "period_end", None)
+    period = f"{ps} — {pe}" if ps and pe else (str(ps) if ps else None)
+
     return ReportData(
         org_name=org_name,
         report_title=report_title,
@@ -162,4 +170,6 @@ def build_report_data(
         severity_counts={k: v for k, v in sev_counts.items() if v},
         findings=report_findings,
         summary_stale_note=stale_note,
+        period=period,
+        scope=getattr(engagement, "scope", None),
     )
