@@ -405,6 +405,31 @@ export const setBaseline = (
     }
   );
 
+// ---------- Pusat Ingest ----------
+export interface IngestItem {
+  upload_id: number;
+  engagement_id: number;
+  engagement_name: string;
+  filename: string;
+  tool: string;
+  status: string;
+  error: string | null;
+  /** "manual" bila diunggah pengguna, "watcher" bila diserap otomatis (R3). */
+  source: string;
+  can_reparse: boolean;
+  created_at: string | null;
+}
+export interface IngestOverview {
+  items: IngestItem[];
+  summary: { today: number; failed: number; total: number };
+}
+export const getIngest = (status?: string) =>
+  req<IngestOverview>(`/ingest${status ? `?status=${encodeURIComponent(status)}` : ""}`);
+export const reparseUpload = (engagementId: number, uploadId: number) =>
+  req<ScanUpload>(`/engagements/${engagementId}/uploads/${uploadId}/reparse`, {
+    method: "POST",
+  });
+
 // ---------- D17: transparansi masking + audit log (admin) ----------
 export const previewMasking = (text: string) =>
   req<{ masked: string }>("/admin/masking-preview", {

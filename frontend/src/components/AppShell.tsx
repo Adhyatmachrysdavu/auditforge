@@ -8,6 +8,7 @@ import {
   FolderOpen,
   Bug,
   FileText,
+  Path,
   ShieldCheck,
   Sun,
   Moon,
@@ -25,6 +26,7 @@ const NAV: { href: string; icon: React.ReactNode; key: MessageKey }[] = [
   { href: "/engagements", icon: <FolderOpen size={18} />, key: "nav.engagements" },
   { href: "/findings", icon: <Bug size={18} />, key: "nav.findings" },
   { href: "/reports", icon: <FileText size={18} />, key: "nav.reports" },
+  { href: "/ingest", icon: <Path size={18} />, key: "nav.ingest" },
   { href: "/admin", icon: <ShieldCheck size={18} />, key: "nav.admin" },
 ];
 
