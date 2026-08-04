@@ -112,7 +112,7 @@ export default function ReportsPage() {
                     </td>
                     <td>
                       <button
-                        className="btn ghost"
+                        className="btn secondary"
                         onClick={() =>
                           api
                             .previewReport(r.engagement_id, "approved", locale)
@@ -122,7 +122,7 @@ export default function ReportsPage() {
                         <Eye size={14} /> {t("report.preview")}
                       </button>{" "}
                       <button
-                        className="btn ghost"
+                        className="btn secondary"
                         onClick={() =>
                           api
                             .downloadReportDocx(r.engagement_id, "approved", locale)
@@ -132,7 +132,7 @@ export default function ReportsPage() {
                         <FileDoc size={14} /> DOCX
                       </button>{" "}
                       <button
-                        className="btn ghost"
+                        className="btn secondary"
                         onClick={() =>
                           api
                             .downloadReportPdf(r.engagement_id, "approved", locale)
