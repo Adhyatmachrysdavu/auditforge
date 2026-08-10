@@ -1,16 +1,33 @@
 name: auditforge
 
+# Berkas ini untuk PENGEMBANGAN: hot-reload, bind-mount kode, seluruh port
+# terbuka ke host agar mudah diperiksa. Untuk server, tambahkan
+# docker-compose.prod.yml (lihat DEPLOY.md) yang menutup port dan memakai
+# build produksi.
+#
+# Setiap nilai memakai bentuk ${VAR:-bawaan}: nilai dari .env selalu menang,
+# dan tanpa .env pun stack tetap menyala untuk pengembangan. Menuliskannya
+# sebagai literal di `environment:` akan MENIMPA env_file — sandi yang diganti
+# di .env lalu tak berpengaruh sama sekali, tanpa galat apa pun.
+
+x-backend-env: &backend-env
+  DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://auditforge:auditforge@postgres:5432/auditforge}
+  REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+  MINIO_ENDPOINT: ${MINIO_ENDPOINT:-minio:9000}
+  MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-auditforge}
+  MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-auditforge-secret}
+
 services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: auditforge
-      POSTGRES_PASSWORD: auditforge
-      POSTGRES_DB: auditforge
+      POSTGRES_USER: ${POSTGRES_USER:-auditforge}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-auditforge}
+      POSTGRES_DB: ${POSTGRES_DB:-auditforge}
     ports: ["5432:5432"]
     volumes: ["pgdata:/var/lib/postgresql/data"]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U auditforge"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-auditforge}"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -28,8 +45,8 @@ services:
     image: minio/minio:latest
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: auditforge
-      MINIO_ROOT_PASSWORD: auditforge-secret
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-auditforge}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-auditforge-secret}
     # Konsol MinIO dipetakan ke 9101 di host (9001 dipakai app lain, mis. Herd)
     ports: ["9000:9000", "9101:9001"]
     volumes: ["miniodata:/data"]
@@ -37,10 +54,7 @@ services:
   api:
     build: ./backend
     env_file: [.env]
-    environment:
-      DATABASE_URL: postgresql+psycopg://auditforge:auditforge@postgres:5432/auditforge
-      REDIS_URL: redis://redis:6379/0
-      MINIO_ENDPOINT: minio:9000
+    environment: *backend-env
     ports: ["8000:8000"]
     depends_on:
       postgres: { condition: service_healthy }
@@ -53,9 +67,7 @@ services:
     command: celery -A app.workers.celery_app.celery_app worker --loglevel=info
     env_file: [.env]
     environment:
-      DATABASE_URL: postgresql+psycopg://auditforge:auditforge@postgres:5432/auditforge
-      REDIS_URL: redis://redis:6379/0
-      MINIO_ENDPOINT: minio:9000
+      <<: *backend-env
       WATCH_DIR: /watch
     depends_on:
       redis: { condition: service_healthy }
@@ -68,9 +80,7 @@ services:
     command: celery -A app.workers.celery_app.celery_app beat --loglevel=info
     env_file: [.env]
     environment:
-      DATABASE_URL: postgresql+psycopg://auditforge:auditforge@postgres:5432/auditforge
-      REDIS_URL: redis://redis:6379/0
-      MINIO_ENDPOINT: minio:9000
+      <<: *backend-env
       WATCH_DIR: /watch
     depends_on:
       redis: { condition: service_healthy }
@@ -81,7 +91,7 @@ services:
     env_file: [.env]
     environment:
       # Same-origin: klien memanggil /api/* → di-proxy Next (next.config.mjs) ke
-      # backend. Cukup satu tunnel (port 3000) untuk demo publik; tak perlu CORS.
+      # backend. Cukup satu port (3000) yang perlu terbuka; tak perlu CORS.
       NEXT_PUBLIC_API_BASE: /api
       API_PROXY_TARGET: http://api:8000
       # Bind-mount Windows tak mengirim event inotify → pakai polling agar hot-reload jalan.
