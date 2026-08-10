@@ -324,6 +324,7 @@ export default function EngagementDetailPage() {
     if (openId === fid) {
       setOpenId(null);
       setDetail(null);
+      setDiff(null);
       return;
     }
     setOpenId(fid);
@@ -332,6 +333,9 @@ export default function EngagementDetailPage() {
     setShowHist(false);
     setReviewMsg(null);
     setAtts([]);
+    // Perbandingan milik temuan sebelumnya; membiarkannya membuat angka satu
+    // temuan terbaca di bawah judul temuan lain.
+    setDiff(null);
     try {
       setDetail(await api.getFinding(id, fid));
       await loadAttachments(fid);
@@ -363,6 +367,8 @@ export default function EngagementDetailPage() {
       const updated = await api.editNarrative(id, fid, editVals);
       setDetail(updated);
       setEditing(false);
+      // Naratif berubah, jadi perbandingan lama sudah basi.
+      setDiff(null);
       setReviewMsg(t("review.saved"));
       setTimeout(() => setReviewMsg(null), 4000);
     } catch (err) {
@@ -1147,11 +1153,29 @@ export default function EngagementDetailPage() {
                                   className="card"
                                   style={{ marginTop: 12, background: "var(--surface-2)" }}
                                 >
-                                  <p className="mono" style={{ marginTop: 0 }}>
-                                    {t("diff.overall")}:{" "}
-                                    {Math.round(diff.overall_changed_ratio * 100)}%
-                                  </p>
-                                  {Object.entries(diff.sections).map(([name, sec]) => (
+                                  {/* Angka hanya bermakna bila ada draf AI yang
+                                      benar-benar disunting; tiga keadaan lain
+                                      dijelaskan agar tak terbaca terbalik. */}
+                                  {!diff.ai_drafted && !diff.edited ? (
+                                    <p className="muted" style={{ marginTop: 0 }}>
+                                      {t("diff.empty")}
+                                    </p>
+                                  ) : (
+                                    <>
+                                      <p className="mono" style={{ marginTop: 0 }}>
+                                        {t("diff.overall")}:{" "}
+                                        {Math.round(diff.overall_changed_ratio * 100)}%
+                                      </p>
+                                      {!diff.edited && (
+                                        <p className="muted">{t("diff.unedited")}</p>
+                                      )}
+                                      {!diff.ai_drafted && (
+                                        <p className="muted">{t("diff.noDraft")}</p>
+                                      )}
+                                    </>
+                                  )}
+                                  {diff.edited &&
+                                    Object.entries(diff.sections).map(([name, sec]) => (
                                     <div key={name} style={{ marginTop: 10 }}>
                                       <strong>
                                         {t(`narr.${
