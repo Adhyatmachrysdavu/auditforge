@@ -38,3 +38,6 @@ Thumbs.db
 
 # Artefak build TypeScript inkremental (regenerate tiap tsc jalan)
 frontend/tsconfig.tsbuildinfo
+
+# Hasil scripts/backup.sh — jangan pernah ikut ter-commit (memuat data klien).
+backups/
