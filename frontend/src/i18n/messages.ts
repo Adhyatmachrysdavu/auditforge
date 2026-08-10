@@ -164,6 +164,10 @@ export const messages = {
     "diff.added": "Ditambahkan",
     "diff.removed": "Dihapus",
     "diff.none": "Tidak ada perbedaan dari draf AI.",
+    "diff.unedited": "Auditor menerima draf AI apa adanya — tidak ada kata yang diubah.",
+    "diff.noDraft":
+      "Naratif ini ditulis auditor tanpa draf AI, jadi persentasenya bukan ukuran penyuntingan.",
+    "diff.empty": "Belum ada naratif untuk dibandingkan.",
     "rev.ai_draft": "Draf AI dibuat",
     "rev.edit": "Naratif disunting",
     "rev.submit": "Diajukan untuk ditinjau",
@@ -445,6 +449,10 @@ export const messages = {
     "diff.added": "Added",
     "diff.removed": "Removed",
     "diff.none": "No difference from the AI draft.",
+    "diff.unedited": "The auditor accepted the AI draft as-is — no words changed.",
+    "diff.noDraft":
+      "This narrative was written by the auditor without an AI draft, so the percentage is not an editing measure.",
+    "diff.empty": "No narrative to compare yet.",
     "rev.ai_draft": "AI draft created",
     "rev.edit": "Narrative edited",
     "rev.submit": "Submitted for review",

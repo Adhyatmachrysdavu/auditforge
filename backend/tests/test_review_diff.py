@@ -32,6 +32,47 @@ def test_missing_draft_counts_as_fully_written_by_auditor():
     assert d["sections"]["description"]["before"] == ""
 
 
+def test_unedited_draft_is_zero_change_not_full_removal():
+    """Auditor menerima draf AI apa adanya → nol perubahan, bukan 100%.
+
+    `final_narrative` yang kosong berarti auditor tak menyunting; laporan pun
+    memakai draf AI sebagai naratif efektif (`report_data._narrative`). Diff
+    harus mengikuti aturan yang sama, jika tidak indikator proposal terbaca
+    persis terbalik.
+    """
+    draft = {
+        "description": "Sistem mendukung TLS lawas",
+        "impact": "Memudahkan pemetaan permukaan serangan",
+        "recommendation": "Aktifkan hanya TLS 1.2 ke atas",
+    }
+    for kosong in (None, {}, {"description": "", "impact": "  ", "recommendation": ""}):
+        d = diff_narrative(draft, kosong)
+        assert d["overall_changed_ratio"] == 0.0
+        assert d["edited"] is False
+        assert d["ai_drafted"] is True
+        for s in SECTIONS:
+            sec = d["sections"][s]
+            assert sec["added"] == []
+            assert sec["removed"] == []
+            # Naratif efektif = draf AI, jadi kedua sisi menampilkan teks itu.
+            assert sec["after"] == sec["before"]
+
+
+def test_flags_report_who_wrote_the_narrative():
+    n = {"description": "isi", "impact": "", "recommendation": ""}
+    disunting = diff_narrative({"description": "asal"}, n)
+    assert disunting["edited"] is True
+    assert disunting["ai_drafted"] is True
+
+    tanpa_draf = diff_narrative(None, n)
+    assert tanpa_draf["edited"] is True
+    assert tanpa_draf["ai_drafted"] is False
+
+    kosong = diff_narrative(None, None)
+    assert kosong["edited"] is False
+    assert kosong["ai_drafted"] is False
+
+
 def test_both_empty_is_not_a_change():
     d = diff_narrative(None, None)
     assert d["overall_changed_ratio"] == 0.0

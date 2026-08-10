@@ -459,6 +459,10 @@ export interface NarrativeDiff {
   sections: Record<string, DiffSection>;
   /** Porsi kata yang diubah auditor, ditimbang panjang tiap bagian. */
   overall_changed_ratio: number;
+  /** Ada draf AI untuk dibandingkan. */
+  ai_drafted: boolean;
+  /** Auditor menyimpan naratif final; bila false, draf AI diterima apa adanya. */
+  edited: boolean;
 }
 export const getFindingDiff = (id: number, findingId: number) =>
   req<NarrativeDiff>(`/engagements/${id}/findings/${findingId}/diff`);

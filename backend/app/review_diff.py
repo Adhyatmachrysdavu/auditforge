@@ -10,6 +10,12 @@ kalimat memerlukan penyuntingan berat"*. Karena itu rasio keseluruhan
 ditimbang panjang kata, bukan dirata-ratakan per bagian: satu kalimat pendek
 yang diganti total tidak boleh terlihat sebesar satu paragraf panjang yang
 dirombak.
+
+Naratif final yang kosong berarti auditor **menerima draf AI apa adanya**,
+bukan menghapus seluruh isinya. Modul ini mengikuti aturan naratif efektif
+yang sama dengan `reporting/report_data.py` (`final or draft`); tanpa itu
+temuan yang tak pernah disunting akan melaporkan 100% berubah — kebalikan
+persis dari kenyataan, tepat pada angka yang dijadikan bukti.
 """
 from __future__ import annotations
 
@@ -58,18 +64,40 @@ def _diff_section(before: str, after: str) -> dict[str, object]:
     }
 
 
+def _has_text(source: object) -> bool:
+    """True bila setidaknya satu bagian naratif terisi."""
+    return any(_text(source, name) for name in SECTIONS)
+
+
 def diff_narrative(before: dict | None, after: dict | None) -> dict[str, object]:
-    """Bandingkan draf AI (`before`) dengan naratif final auditor (`after`)."""
+    """Bandingkan draf AI (`before`) dengan naratif final auditor (`after`).
+
+    Mengembalikan dua penanda agar pemanggil dapat menjelaskan angkanya:
+    `ai_drafted` (ada draf AI) dan `edited` (auditor menyimpan naratif final).
+    Bila `edited` bernilai False, naratif efektif adalah draf AI itu sendiri
+    sehingga rasio perubahannya nol.
+    """
+    ai_drafted = _has_text(before)
+    edited = _has_text(after)
+
+    # Auditor menerima draf apa adanya: bandingkan draf dengan dirinya sendiri.
+    effective = after if edited else before
+
     sections: dict[str, object] = {}
     total_weight = 0
     weighted_change = 0.0
 
     for name in SECTIONS:
-        result = _diff_section(_text(before, name), _text(after, name))
+        result = _diff_section(_text(before, name), _text(effective, name))
         weight = int(result.pop("_weight"))
         total_weight += weight
         weighted_change += float(result["changed_ratio"]) * weight
         sections[name] = result
 
     overall = round(weighted_change / total_weight, 4) if total_weight else 0.0
-    return {"sections": sections, "overall_changed_ratio": overall}
+    return {
+        "sections": sections,
+        "overall_changed_ratio": overall,
+        "ai_drafted": ai_drafted,
+        "edited": edited,
+    }
