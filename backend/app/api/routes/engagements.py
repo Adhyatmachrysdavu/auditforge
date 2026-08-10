@@ -743,6 +743,54 @@ def _sync_knowledge_entry(
 
 
 @router.post(
+    "/{engagement_id}/findings/{finding_id}/apply-knowledge/{entry_id}",
+    response_model=FindingDetailOut,
+)
+def apply_knowledge(
+    engagement_id: int,
+    finding_id: int,
+    entry_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles("auditor", "admin")),
+) -> FindingDetailOut:
+    """Pakai naratif entri Basis Pengetahuan sebagai naratif final temuan ini.
+
+    Tercatat sebagai **suntingan auditor** (`action="edit"`, `author_id` terisi),
+    bukan `ai_draft`. Naskah itu berasal dari manusia yang telah menyetujuinya di
+    penugasan lain, bukan dari model; menandainya sebagai draf AI akan merusak
+    keterlacakan yang menjadi inti prinsip proposal.
+    """
+    _get_engagement(db, engagement_id, user)
+    f = _get_finding(db, engagement_id, finding_id)
+    entry = db.get(KnowledgeEntry, entry_id)
+    if entry is None:
+        raise HTTPException(
+            status_code=404, detail="Entri Basis Pengetahuan tak ditemukan"
+        )
+
+    source = entry.narrative if isinstance(entry.narrative, dict) else {}
+    narrative = {
+        "description": str(source.get("description", "") or "").strip(),
+        "impact": str(source.get("impact", "") or "").strip(),
+        "recommendation": str(source.get("recommendation", "") or "").strip(),
+    }
+    f.final_narrative = narrative
+    f.narrative_edited = True
+    _add_revision(
+        db,
+        f,
+        action="edit",
+        note=f"Naratif diambil dari Basis Pengetahuan (entri #{entry.id}).",
+        author_id=user.id,
+        narrative=narrative,
+    )
+    entry.usage_count = (entry.usage_count or 0) + 1
+    db.commit()
+    db.refresh(f)
+    return _finding_detail(f)
+
+
+@router.post(
     "/{engagement_id}/findings/{finding_id}/status", response_model=FindingDetailOut
 )
 def change_status(
