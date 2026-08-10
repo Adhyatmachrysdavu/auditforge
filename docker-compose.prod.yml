@@ -108,6 +108,9 @@ services:
         NEXT_PUBLIC_API_BASE: /api
     volumes: !reset []
     restart: unless-stopped
+    # Satu-satunya port yang terbuka. Dapat dipindah lewat WEB_PORT bila 3000
+    # sudah dipakai proses lain di host.
+    ports: !override ["${WEB_PORT:-3000}:3000"]
     environment:
       NODE_ENV: production
       NEXT_PUBLIC_API_BASE: /api

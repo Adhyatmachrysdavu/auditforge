@@ -37,8 +37,14 @@ PostgreSQL 16 · MinIO · python-docx · WeasyPrint · Jinja2 · Next.js 14 · T
 
 ```bash
 cp .env.example .env      # sesuaikan bila perlu (LLM diatur dari panel Admin — lihat di bawah)
-docker compose up --build
+docker compose up -d --build
+./scripts/demo.sh         # muat data contoh — tanpa ini aplikasinya kosong
 ```
+
+> **Baru pertama kali membuka repositori ini?** Mulai dari **[DEMO.md](DEMO.md)**:
+> tur berpandu memakai data contoh, penjelasan auto-ingest, serta daftar fitur
+> yang sudah ada **dan yang belum**. Data contohnya sudah memuat naratif AI yang
+> jadi, sehingga seluruh sistem dapat ditelusuri tanpa kunci LLM.
 
 > Perintah di atas untuk **pengembangan**: hot-reload menyala dan seluruh port
 > terbuka ke host agar mudah diperiksa. Untuk memasang di server, ikuti
