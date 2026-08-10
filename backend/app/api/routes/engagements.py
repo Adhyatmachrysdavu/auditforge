@@ -18,10 +18,17 @@ from app.eval.engagement_eval import evaluate_engagement
 from app.eval.timing import timing_summary
 from app.ingest.dedup import find_parsed_duplicate
 from app.ingest.rules import can_reparse, sha256_of
+from app.knowledge.entries import (
+    effective_narrative,
+    is_auditor_edited,
+    should_create_entry,
+)
+from app.knowledge.matching import normalize_title
 from app.models.engagement import Engagement
 from app.models.engagement_member import EngagementMember
 from app.models.enums import ScanTool, UploadStatus
 from app.models.finding import Finding, FindingAttachment, FindingRevision
+from app.models.knowledge_entry import KnowledgeEntry
 from app.models.scan_upload import ScanUpload
 from app.models.user import User
 from app.reporting.branding import load_branding
@@ -698,6 +705,43 @@ def edit_narrative(
     return _finding_detail(f)
 
 
+def _sync_knowledge_entry(
+    db: Session, f: Finding, eng: Engagement, user: User
+) -> None:
+    """Buat entri Basis Pengetahuan bila temuan baru saja disetujui (Modul 3).
+
+    Seluruh keputusannya ada di `app.knowledge.entries`; di sini hanya I/O.
+    Kegagalan syarat bukan galat — persetujuan tetap sah meski entri tak dibuat
+    (mis. penugasan menolak berbagi).
+    """
+    narrative = effective_narrative(f)
+    exists = db.scalar(
+        select(KnowledgeEntry.id).where(KnowledgeEntry.source_finding_id == f.id)
+    )
+    ok, _alasan = should_create_entry(
+        status=f.status,
+        kb_shareable=bool(eng.kb_shareable),
+        narrative=narrative,
+        already_exists=exists is not None,
+    )
+    if not ok:
+        return
+    db.add(
+        KnowledgeEntry(
+            source_finding_id=f.id,
+            source_engagement_id=eng.id,
+            title=f.title,
+            title_norm=normalize_title(f.title),
+            cwe=f.cwe,
+            owasp=f.owasp,
+            severity=f.severity,
+            narrative=narrative,
+            auditor_edited=is_auditor_edited(f),
+            created_by=user.id,
+        )
+    )
+
+
 @router.post(
     "/{engagement_id}/findings/{finding_id}/status", response_model=FindingDetailOut
 )
@@ -709,7 +753,7 @@ def change_status(
     user: User = Depends(get_current_user),
 ) -> FindingDetailOut:
     """Pindahkan status temuan mengikuti mesin status + batas persetujuan peran."""
-    _get_engagement(db, engagement_id, user)
+    eng = _get_engagement(db, engagement_id, user)
     f = _get_finding(db, engagement_id, finding_id)
     target = payload.status
     if not is_valid_status(target):
@@ -731,6 +775,7 @@ def change_status(
         db, f, action=_ACTION_FOR_STATUS.get(target, target),
         note=payload.note, author_id=user.id,
     )
+    _sync_knowledge_entry(db, f, eng, user)
     db.commit()
     db.refresh(f)
     return _finding_detail(f)
