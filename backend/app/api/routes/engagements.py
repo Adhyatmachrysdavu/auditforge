@@ -33,6 +33,7 @@ from app.models.scan_upload import ScanUpload
 from app.models.user import User
 from app.reporting.branding import load_branding
 from app.reporting.docx_writer import render_docx
+from app.reporting.filenames import ascii_fallback, content_disposition
 from app.reporting.html_writer import render_html
 from app.reporting.pdf_writer import render_pdf
 from app.reporting.report_data import ReportData, build_report_data
@@ -971,7 +972,7 @@ def download_attachment(
     return Response(
         content=data,
         media_type=a.content_type or "application/octet-stream",
-        headers={"Content-Disposition": f'attachment; filename="{a.filename}"'},
+        headers={"Content-Disposition": content_disposition(a.filename)},
     )
 
 
@@ -1055,7 +1056,8 @@ def _assemble_report(
 
 
 def _safe_name(name: str | None) -> str:
-    return (name or "laporan").replace("/", "_").replace("\\", "_").replace('"', "")
+    """Nama berkas ASCII untuk header unduhan (lihat `reporting/filenames.py`)."""
+    return ascii_fallback(name)
 
 
 @router.get("/{engagement_id}/evaluation")
@@ -1137,8 +1139,8 @@ def download_report_docx(
         content=blob,
         media_type=_DOCX_MIME,
         headers={
-            "Content-Disposition": (
-                f'attachment; filename="AuditForge_{_safe_name(data.engagement_name)}.docx"'
+            "Content-Disposition": content_disposition(
+                f"AuditForge_{data.engagement_name}.docx"
             )
         },
     )
@@ -1174,8 +1176,8 @@ def download_report_pdf(
         content=blob,
         media_type="application/pdf",
         headers={
-            "Content-Disposition": (
-                f'attachment; filename="AuditForge_{_safe_name(data.engagement_name)}.pdf"'
+            "Content-Disposition": content_disposition(
+                f"AuditForge_{data.engagement_name}.pdf"
             )
         },
     )
