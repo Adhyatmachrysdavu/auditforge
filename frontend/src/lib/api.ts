@@ -467,6 +467,60 @@ export interface NarrativeDiff {
 export const getFindingDiff = (id: number, findingId: number) =>
   req<NarrativeDiff>(`/engagements/${id}/findings/${findingId}/diff`);
 
+// ---------- Modul 3: pencarian temuan & Basis Pengetahuan ----------
+export interface FindingSearchItem {
+  id: number;
+  engagement_id: number;
+  engagement_name: string;
+  client_name: string;
+  title: string;
+  severity: string;
+  status: string;
+  priority: number | null;
+  cwe: string | null;
+  owasp: string | null;
+  cvss_score: number | null;
+}
+export interface FindingSearchFilters {
+  q?: string;
+  severity?: string;
+  status?: string;
+  cwe?: string;
+}
+export const searchFindings = (f: FindingSearchFilters = {}) => {
+  const p = new URLSearchParams();
+  if (f.q) p.set("q", f.q);
+  if (f.severity) p.set("severity", f.severity);
+  if (f.status) p.set("status", f.status);
+  if (f.cwe) p.set("cwe", f.cwe);
+  const qs = p.toString();
+  return req<{ items: FindingSearchItem[] }>(`/findings${qs ? `?${qs}` : ""}`);
+};
+
+export interface KnowledgeEntry {
+  id: number;
+  source_finding_id: number;
+  source_engagement_id: number;
+  source_engagement_name: string;
+  source_client_name: string;
+  title: string;
+  cwe: string | null;
+  owasp: string | null;
+  severity: string;
+  narrative: { description?: string; impact?: string; recommendation?: string };
+  /** Naskah diketik auditor; false berarti draf AI yang disetujui apa adanya. */
+  auditor_edited: boolean;
+  usage_count: number;
+  created_at: string;
+}
+export const listKnowledge = (q?: string, cwe?: string) => {
+  const p = new URLSearchParams();
+  if (q) p.set("q", q);
+  if (cwe) p.set("cwe", cwe);
+  const qs = p.toString();
+  return req<{ items: KnowledgeEntry[] }>(`/knowledge${qs ? `?${qs}` : ""}`);
+};
+
 // ---------- Pusat Ingest ----------
 export interface IngestItem {
   upload_id: number;
