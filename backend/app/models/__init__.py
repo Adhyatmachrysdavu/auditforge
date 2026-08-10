@@ -3,6 +3,7 @@ from app.models.audit_log import AuditLog
 from app.models.engagement import Engagement
 from app.models.engagement_member import EngagementMember
 from app.models.finding import Finding, FindingAttachment, FindingRevision
+from app.models.knowledge_entry import KnowledgeEntry
 from app.models.scan_upload import ScanUpload
 from app.models.user import Role, User
 
@@ -13,6 +14,7 @@ __all__ = [
     "Finding",
     "FindingAttachment",
     "FindingRevision",
+    "KnowledgeEntry",
     "ScanUpload",
     "Role",
     "User",
