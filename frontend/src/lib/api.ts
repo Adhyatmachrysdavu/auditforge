@@ -521,6 +521,23 @@ export const listKnowledge = (q?: string, cwe?: string) => {
   return req<{ items: KnowledgeEntry[] }>(`/knowledge${qs ? `?${qs}` : ""}`);
 };
 
+export interface KnowledgeSuggestion {
+  entry: KnowledgeEntry;
+  /** 0..1 — bobot besar pada kesamaan CWE, sisanya irisan token judul. */
+  score: number;
+}
+export const suggestKnowledge = (findingId: number, limit = 5) =>
+  req<{ items: KnowledgeSuggestion[] }>(
+    `/knowledge/suggest?finding_id=${findingId}&limit=${limit}`,
+  );
+
+/** Pakai naratif entri KB sebagai naratif final; tercatat sebagai suntingan auditor. */
+export const applyKnowledge = (id: number, findingId: number, entryId: number) =>
+  req<FindingDetail>(
+    `/engagements/${id}/findings/${findingId}/apply-knowledge/${entryId}`,
+    { method: "POST" },
+  );
+
 // ---------- Pusat Ingest ----------
 export interface IngestItem {
   upload_id: number;

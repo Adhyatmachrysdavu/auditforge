@@ -8,6 +8,7 @@ import {
   Eye,
   FileArrowDown,
   FilePdf,
+  Lightbulb,
   ListChecks,
   PencilSimple,
   Sliders,
@@ -78,6 +79,9 @@ export default function EngagementDetailPage() {
   const params = useParams();
   const id = Number(Array.isArray(params.id) ? params.id[0] : params.id);
   const canApprove = !!user && APPROVER_ROLES.includes(user.role);
+  // Saran rujukan memuat naratif penugasan klien lain — batasnya sama dengan
+  // Basis Pengetahuan: hanya auditor dan admin.
+  const canUseKb = user?.role === "auditor" || user?.role === "admin";
 
   const [eng, setEng] = useState<api.EngagementDetail | null>(null);
   const [uploads, setUploads] = useState<api.ScanUpload[]>([]);
@@ -118,6 +122,9 @@ export default function EngagementDetailPage() {
   const [revs, setRevs] = useState<api.FindingRevision[]>([]);
   // --- Modul 2: perbandingan draf AI vs naratif final ---
   const [diff, setDiff] = useState<api.NarrativeDiff | null>(null);
+  // --- Modul 3: saran rujukan dari Basis Pengetahuan ---
+  const [sugg, setSugg] = useState<api.KnowledgeSuggestion[] | null>(null);
+  const [suggBusy, setSuggBusy] = useState(false);
   // --- D14: tab, mode tampilan, kanban, lampiran ---
   const [tab, setTab] = useState<"files" | "findings" | "summary" | "team">("findings");
   const [viewMode, setViewMode] = useState<"list" | "kanban">("list");
@@ -325,6 +332,7 @@ export default function EngagementDetailPage() {
       setOpenId(null);
       setDetail(null);
       setDiff(null);
+      setSugg(null);
       return;
     }
     setOpenId(fid);
@@ -333,9 +341,10 @@ export default function EngagementDetailPage() {
     setShowHist(false);
     setReviewMsg(null);
     setAtts([]);
-    // Perbandingan milik temuan sebelumnya; membiarkannya membuat angka satu
-    // temuan terbaca di bawah judul temuan lain.
+    // Perbandingan dan saran rujukan milik temuan sebelumnya; membiarkannya
+    // membuat angka satu temuan terbaca di bawah judul temuan lain.
     setDiff(null);
+    setSugg(null);
     try {
       setDetail(await api.getFinding(id, fid));
       await loadAttachments(fid);
@@ -360,6 +369,24 @@ export default function EngagementDetailPage() {
     setEditing(true);
   }
 
+  async function applySuggestion(fid: number, entryId: number) {
+    setReviewBusy(true);
+    setError(null);
+    try {
+      const updated = await api.applyKnowledge(id, fid, entryId);
+      setDetail(updated);
+      // Naratif berubah; saran dan perbandingan lama tak lagi menggambarkannya.
+      setSugg(null);
+      setDiff(null);
+      setReviewMsg(t("kb.applied"));
+      setTimeout(() => setReviewMsg(null), 4000);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : String(err));
+    } finally {
+      setReviewBusy(false);
+    }
+  }
+
   async function saveNarrative(fid: number) {
     setReviewBusy(true);
     setError(null);
@@ -369,6 +396,7 @@ export default function EngagementDetailPage() {
       setEditing(false);
       // Naratif berubah, jadi perbandingan lama sudah basi.
       setDiff(null);
+      setSugg(null);
       setReviewMsg(t("review.saved"));
       setTimeout(() => setReviewMsg(null), 4000);
     } catch (err) {
@@ -937,7 +965,102 @@ export default function EngagementDetailPage() {
                                   <ListChecks size={15} />{" "}
                                   {diff ? t("diff.hide") : t("diff.tab")}
                                 </button>
+                                {/* Saran rujukan memuat naratif klien lain →
+                                    hanya auditor/admin, sama seperti Basis
+                                    Pengetahuan itu sendiri. */}
+                                {canUseKb && (
+                                  <button
+                                    className="btn secondary"
+                                    onClick={() => {
+                                      if (sugg) {
+                                        setSugg(null);
+                                        return;
+                                      }
+                                      setError(null);
+                                      setSuggBusy(true);
+                                      api
+                                        .suggestKnowledge(detail.id)
+                                        .then((d) => setSugg(d.items))
+                                        .catch((err) =>
+                                          setError(
+                                            err instanceof ApiError
+                                              ? err.message
+                                              : String(err)
+                                          )
+                                        )
+                                        .finally(() => setSuggBusy(false));
+                                    }}
+                                    disabled={reviewBusy || suggBusy}
+                                  >
+                                    <Lightbulb size={15} />{" "}
+                                    {sugg ? t("kb.suggestHide") : t("kb.suggest")}
+                                  </button>
+                                )}
                               </div>
+
+                              {/* Saran rujukan lintas penugasan (Modul 3) */}
+                              {sugg && (
+                                <div
+                                  className="card"
+                                  style={{ marginTop: 12, background: "var(--surface-2)" }}
+                                >
+                                  <p className="muted" style={{ marginTop: 0 }}>
+                                    {t("kb.suggestNote")}
+                                  </p>
+                                  {sugg.length === 0 ? (
+                                    <p className="muted">{t("kb.suggestEmpty")}</p>
+                                  ) : (
+                                    sugg.map((s) => (
+                                      <div
+                                        key={s.entry.id}
+                                        style={{
+                                          borderTop: "1px solid var(--border)",
+                                          paddingTop: 8,
+                                          marginTop: 8,
+                                        }}
+                                      >
+                                        <div
+                                          style={{
+                                            display: "flex",
+                                            gap: 8,
+                                            alignItems: "center",
+                                            flexWrap: "wrap",
+                                          }}
+                                        >
+                                          <span className="badge ok mono">
+                                            {Math.round(s.score * 100)}%
+                                          </span>
+                                          <strong>{s.entry.title}</strong>
+                                          <span className="mono">
+                                            {s.entry.cwe ?? "—"}
+                                          </span>
+                                        </div>
+                                        <p className="muted mono" style={{ margin: "4px 0" }}>
+                                          {t("kb.from")}: #{s.entry.source_engagement_id}{" "}
+                                          {s.entry.source_engagement_name} ·{" "}
+                                          {s.entry.source_client_name} ·{" "}
+                                          {s.entry.auditor_edited
+                                            ? t("kb.byAuditor")
+                                            : t("kb.byAi")}
+                                        </p>
+                                        <p style={{ margin: "4px 0" }}>
+                                          {(s.entry.narrative.description || "").slice(0, 220)}
+                                          {(s.entry.narrative.description || "").length > 220
+                                            ? "…"
+                                            : ""}
+                                        </p>
+                                        <button
+                                          className="btn secondary"
+                                          disabled={reviewBusy || suggBusy}
+                                          onClick={() => applySuggestion(detail.id, s.entry.id)}
+                                        >
+                                          <Sparkle size={15} /> {t("kb.apply")}
+                                        </button>
+                                      </div>
+                                    ))
+                                  )}
+                                </div>
+                              )}
 
                               {reviewMsg && <div className="alert ok">{reviewMsg}</div>}
 
