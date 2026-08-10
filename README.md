@@ -40,6 +40,12 @@ cp .env.example .env      # sesuaikan bila perlu (LLM diatur dari panel Admin �
 docker compose up --build
 ```
 
+> Perintah di atas untuk **pengembangan**: hot-reload menyala dan seluruh port
+> terbuka ke host agar mudah diperiksa. Untuk memasang di server, ikuti
+> **[DEPLOY.md](DEPLOY.md)** — di sana kode dibangun ke dalam image, hanya port
+> 3000 yang terbuka, dan aplikasi **menolak menyala** bila rahasia bawaan belum
+> diganti.
+
 | Untuk | URL |
 |---|---|
 | Web (UI) | http://localhost:3000 |
@@ -48,7 +54,11 @@ docker compose up --build
 | Dokumentasi API (Swagger) | http://localhost:8000/docs |
 | Konsol MinIO | http://localhost:9101 |
 
-### Akun bawaan (seed — ganti sebelum produksi)
+### Akun bawaan (seed — hanya untuk pengembangan)
+
+> Kata sandi di bawah, beserta `SECRET_KEY` bawaan, tertulis di repositori ini.
+> Di produksi aplikasi **tidak akan menyala** sebelum keduanya diganti; lihat
+> [DEPLOY.md](DEPLOY.md) dan `backend/app/core/hardening.py`.
 
 Login memakai **alamat surel** (bukan nama pengguna).
 
