@@ -21,13 +21,21 @@ import { LOCALE_LABEL, type MessageKey } from "@/i18n/messages";
 
 type Theme = "light" | "dark";
 
-const NAV: { href: string; icon: React.ReactNode; key: MessageKey }[] = [
+const NAV: {
+  href: string;
+  icon: React.ReactNode;
+  key: MessageKey;
+  /** Bila diisi, item hanya tampil untuk peran-peran ini. */
+  roles?: string[];
+}[] = [
   { href: "/", icon: <Gauge size={18} weight="bold" />, key: "nav.dashboard" },
   { href: "/engagements", icon: <FolderOpen size={18} />, key: "nav.engagements" },
   { href: "/findings", icon: <Bug size={18} />, key: "nav.findings" },
   { href: "/reports", icon: <FileText size={18} />, key: "nav.reports" },
   { href: "/ingest", icon: <Path size={18} />, key: "nav.ingest" },
-  { href: "/admin", icon: <ShieldCheck size={18} />, key: "nav.admin" },
+  // Route-nya sudah admin-only; menunya ikut disembunyikan agar tak menuntun
+  // pengguna ke penolakan.
+  { href: "/admin", icon: <ShieldCheck size={18} />, key: "nav.admin", roles: ["admin"] },
 ];
 
 export function AppShell({
@@ -71,12 +79,14 @@ export function AppShell({
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
 
+  const navItems = NAV.filter((it) => !it.roles || it.roles.includes(user.role));
+
   return (
     <div className="app">
       <aside className="sidebar">
         <div className="brand">AuditForge</div>
         <nav className="nav">
-          {NAV.map((item) => (
+          {navItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}
