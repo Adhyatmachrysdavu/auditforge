@@ -13,7 +13,9 @@ from app.ai.providers import AINotConfigured, get_provider
 from app.api.routes import admin as admin_routes
 from app.api.routes import auth as auth_routes
 from app.api.routes import engagements as engagement_routes
+from app.api.routes import findings as findings_routes
 from app.api.routes import ingest as ingest_routes
+from app.api.routes import knowledge as knowledge_routes
 from app.api.routes import stats as stats_routes
 from app.api.routes import users as users_routes
 from app.core.audit import AuditMiddleware
@@ -38,6 +40,8 @@ app.add_middleware(AuditMiddleware)
 app.include_router(auth_routes.router)
 app.include_router(users_routes.router)
 app.include_router(engagement_routes.router)
+app.include_router(findings_routes.router)
+app.include_router(knowledge_routes.router)
 app.include_router(ingest_routes.router)
 app.include_router(stats_routes.router)
 app.include_router(admin_routes.router)
