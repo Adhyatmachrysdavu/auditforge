@@ -1,0 +1,114 @@
+# Lapisan produksi — dipakai BERSAMA docker-compose.yml, bukan menggantikannya:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# Yang diubah dibanding pengembangan:
+#   - build produksi (next build/start, uvicorn tanpa --reload)
+#   - kode ada di dalam image, bukan bind-mount dari host
+#   - HANYA port 3000 yang terbuka; Postgres, Redis, MinIO, dan API hanya
+#     dapat dihubungi dari jaringan Docker internal
+#   - kontainer dinyalakan ulang otomatis bila server di-boot ulang
+#
+# Catatan penting soal `!reset`: Compose MENGGABUNGKAN daftar `ports` dan
+# `volumes` antar-berkas, jadi menulis `ports: []` tidak menutup apa pun —
+# port dari berkas dasar tetap terbuka. Tag `!reset` (Compose v2.24+) yang
+# benar-benar mengosongkannya. Verifikasi dengan:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml config
+#
+# dan pastikan hanya `web` yang punya `published:`.
+#
+# Port 3000 pun sebaiknya tidak dibuka ke internet langsung — arahkan lewat
+# Tailscale (lihat DEPLOY.md).
+
+services:
+  postgres:
+    ports: !reset []
+    restart: unless-stopped
+
+  redis:
+    ports: !reset []
+    restart: unless-stopped
+
+  minio:
+    # Konsol MinIO tidak perlu terbuka di server; akses lewat `docker exec`
+    # atau buka sementara saat memang dibutuhkan.
+    ports: !reset []
+    restart: unless-stopped
+
+  api:
+    # Tanpa --reload: proses pengawas berkas bukan hanya boros, ia juga memuat
+    # ulang kode dari disk — perilaku yang tak diinginkan di server.
+    command: >
+      uvicorn app.main:app --host 0.0.0.0 --port 8000
+      --workers 4 --proxy-headers --forwarded-allow-ips=*
+    # API dijangkau web lewat jaringan Docker (API_PROXY_TARGET), bukan dari host.
+    ports: !reset []
+    # Kode dari image, bukan dari direktori host.
+    volumes: !reset []
+    restart: unless-stopped
+    # Tanpa ini, kegagalan tidak terlihat: dengan --workers, proses induk uvicorn
+    # tetap hidup sementara worker-nya mati berulang, sehingga `docker ps`
+    # melaporkan "Up" untuk kontainer yang tak melayani apa pun. Diamati
+    # sungguhan: 209 kali worker mati sambil status tetap "Up 59 seconds".
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - |
+          import urllib.request, sys
+          try:
+              urllib.request.urlopen("http://localhost:8000/health", timeout=3)
+          except Exception:
+              sys.exit(1)
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    environment:
+      # Literal, BUKAN ${ENVIRONMENT:-production}: Compose mengambil nilai
+      # interpolasi dari .env, yang berisi `development` — lapisan produksi
+      # lalu diam-diam berjalan dalam mode pengembangan, dan pemeriksaan
+      # rahasia bawaan tak pernah berbunyi. Memakai berkas ini = produksi.
+      ENVIRONMENT: production
+
+  worker:
+    # Folder terpantau tetap perlu di-mount; kodenya tidak. Pakai `!override`,
+    # bukan `!reset` — `!reset` selalu mengosongkan dan tak bisa membawa nilai
+    # pengganti, sehingga auto-ingest (R3) akan mati diam-diam tanpa galat.
+    volumes: !override ["${WATCH_HOST_DIR:-./datasets/watch}:/watch"]
+    restart: unless-stopped
+    environment:
+      # Literal, BUKAN ${ENVIRONMENT:-production}: Compose mengambil nilai
+      # interpolasi dari .env, yang berisi `development` — lapisan produksi
+      # lalu diam-diam berjalan dalam mode pengembangan, dan pemeriksaan
+      # rahasia bawaan tak pernah berbunyi. Memakai berkas ini = produksi.
+      ENVIRONMENT: production
+
+  beat:
+    volumes: !reset []
+    restart: unless-stopped
+    environment:
+      # Literal, BUKAN ${ENVIRONMENT:-production}: Compose mengambil nilai
+      # interpolasi dari .env, yang berisi `development` — lapisan produksi
+      # lalu diam-diam berjalan dalam mode pengembangan, dan pemeriksaan
+      # rahasia bawaan tak pernah berbunyi. Memakai berkas ini = produksi.
+      ENVIRONMENT: production
+
+  web:
+    # Nama image dibedakan dari mode pengembangan. Tanpa ini keduanya sama-sama
+    # bernama `auditforge-web:latest`, sehingga `docker compose up -d` biasa
+    # dapat menjalankan build produksi — hot-reload mati tanpa sebab yang jelas.
+    image: auditforge-web-prod
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+      args:
+        NEXT_PUBLIC_API_BASE: /api
+    volumes: !reset []
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_BASE: /api
+      API_PROXY_TARGET: http://api:8000

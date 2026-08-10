@@ -5,6 +5,11 @@ name: auditforge
 # docker-compose.prod.yml (lihat DEPLOY.md) yang menutup port dan memakai
 # build produksi.
 #
+# ENV_FILE menentukan berkas rahasia yang DIMUAT KE DALAM kontainer. Ia perlu
+# ada karena `--env-file` milik Compose hanya memengaruhi interpolasi ${...}
+# di berkas ini, bukan isi environment kontainer — tanpa ENV_FILE, memasang
+# dengan berkas rahasia lain tetap memuat .env pengembangan diam-diam.
+#
 # Setiap nilai memakai bentuk ${VAR:-bawaan}: nilai dari .env selalu menang,
 # dan tanpa .env pun stack tetap menyala untuk pengembangan. Menuliskannya
 # sebagai literal di `environment:` akan MENIMPA env_file — sandi yang diganti
@@ -53,7 +58,7 @@ services:
 
   api:
     build: ./backend
-    env_file: [.env]
+    env_file: ["${ENV_FILE:-.env}"]
     environment: *backend-env
     ports: ["8000:8000"]
     depends_on:
@@ -65,7 +70,7 @@ services:
   worker:
     build: ./backend
     command: celery -A app.workers.celery_app.celery_app worker --loglevel=info
-    env_file: [.env]
+    env_file: ["${ENV_FILE:-.env}"]
     environment:
       <<: *backend-env
       WATCH_DIR: /watch
@@ -78,7 +83,7 @@ services:
   beat:
     build: ./backend
     command: celery -A app.workers.celery_app.celery_app beat --loglevel=info
-    env_file: [.env]
+    env_file: ["${ENV_FILE:-.env}"]
     environment:
       <<: *backend-env
       WATCH_DIR: /watch
@@ -88,7 +93,7 @@ services:
 
   web:
     build: ./frontend
-    env_file: [.env]
+    env_file: ["${ENV_FILE:-.env}"]
     environment:
       # Same-origin: klien memanggil /api/* → di-proxy Next (next.config.mjs) ke
       # backend. Cukup satu port (3000) yang perlu terbuka; tak perlu CORS.

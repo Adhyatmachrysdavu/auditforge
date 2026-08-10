@@ -1,0 +1,42 @@
+# Build produksi Next.js — bertahap, agar image akhir tak memuat toolchain build.
+#
+# Bedanya dengan Dockerfile pengembangan: di sini kode di-*build* dan disalin ke
+# dalam image, bukan di-bind-mount dari host. Server tidak lagi bergantung pada
+# direktori sumber, dan `next dev` — yang menampilkan overlay galat berisi kode
+# sumber kepada siapa pun yang membuka halaman — tidak ikut terbawa.
+
+FROM node:22-alpine AS builder
+
+WORKDIR /app
+
+# `npm ci` memakai package-lock.json apa adanya, sehingga build di server
+# menghasilkan dependensi yang persis sama dengan yang diuji di sini.
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY . .
+
+# NEXT_PUBLIC_* ikut ter-*bake* ke dalam bundel klien saat build, jadi harus
+# tersedia di sini, bukan hanya saat runtime.
+ARG NEXT_PUBLIC_API_BASE=/api
+ENV NEXT_PUBLIC_API_BASE=$NEXT_PUBLIC_API_BASE
+
+RUN npm run build
+
+
+FROM node:22-alpine AS runner
+
+WORKDIR /app
+ENV NODE_ENV=production
+
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/next.config.mjs ./next.config.mjs
+
+# Jangan berjalan sebagai root.
+USER node
+
+EXPOSE 3000
+CMD ["npm", "run", "start"]
