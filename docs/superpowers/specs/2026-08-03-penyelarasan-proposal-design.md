@@ -311,7 +311,8 @@ demi kegunaan. Ketiga pengaman di atas adalah kompensasinya.*
 | `cwe` | String(32), indexed, nullable |
 | `owasp` | String(64), nullable |
 | `severity` | String(10) |
-| `narrative` | JSON — salinan `final_narrative` saat disetujui |
+| `narrative` | JSON — salinan **naratif efektif** saat disetujui |
+| `auditor_edited` | Boolean — benar bila naskahnya diketik auditor, salah bila draf AI disetujui apa adanya |
 | `created_by` | FK → `users.id` |
 | `created_at` | DateTime |
 | `usage_count` | Integer, default 0 |
@@ -319,6 +320,27 @@ demi kegunaan. Ketiga pengaman di atas adalah kompensasinya.*
 **Kapan entri dibuat:** saat temuan berpindah ke `approved`, bila
 `engagement.kb_shareable` bernilai benar. Salinan diambil pada saat itu — perubahan
 belakangan pada temuan asal tidak mengubah entri KB, sehingga rujukan bersifat stabil.
+
+**Naratif efektif, bukan `final_narrative` semata** *(revisi 10 Agustus 2026)*. Naskah yang
+disalin mengikuti aturan `final or draft` yang sudah dipakai `reporting/report_data.py` dan
+`review_diff.py`. Alasannya: `final_narrative` yang kosong berarti auditor **menerima draf
+AI apa adanya**, bukan tidak punya naratif. Pada basis data saat revisi ini ditulis, 10
+temuan berstatus `approved` tetapi hanya 4 memiliki `final_narrative`; membaca kolom itu
+mentah-mentah akan membuang 6 naratif yang telah disetujui manusia. Kolom `auditor_edited`
+merekam bedanya agar auditor tahu bobot tiap rujukan — bukan untuk menyaringnya.
+
+Kekeliruan yang sama pernah terjadi di `review_diff.py` dan menghasilkan angka yang persis
+terbalik; lihat commit `f54c8e1`.
+
+**Pengisian mundur** *(revisi 10 Agustus 2026)*. Migrasi Modul 3 mengisi entri dari seluruh
+temuan `approved` yang penugasannya `kb_shareable`, memakai aturan naratif efektif yang
+sama. Tanpa ini Basis Pengetahuan lahir kosong dan baru berguna setelah persetujuan
+berikutnya. Polanya mengikuti backfill `engagement_members` pada migrasi `c5e1a90f4b26`:
+dijalankan dalam transaksi yang sama lalu memverifikasi hasilnya sendiri.
+
+`created_by` untuk entri hasil pengisian mundur diambil dari `FindingRevision` bertindakan
+`approve` yang terakhir; bila tak ada (mis. data lama), kolomnya dibiarkan `NULL` —
+mengarang penulis akan merusak keterlacakan yang justru menjadi inti modul ini.
 
 ### 5.3 Pencocokan lintas penugasan
 
@@ -383,6 +405,11 @@ dibiarkan tipis.
 3. Setujui satu temuan pada penugasan ber-`kb_shareable` → entri KB muncul.
 4. Matikan `kb_shareable`, setujui temuan lain → entri KB **tidak** dibuat.
 5. Buka Basis Pengetahuan → tercatat pada jejak audit.
+6. Setelah migrasi pengisian mundur → KB memuat entri dari temuan `approved` yang sudah ada,
+   termasuk yang naratifnya berupa draf AI yang disetujui apa adanya (`auditor_edited`
+   bernilai salah).
+7. Terapkan satu entri KB ke temuan lain → tercatat sebagai `edit` dengan `author_id` terisi,
+   **bukan** `ai_draft`, dan `usage_count` naik.
 6. `docker exec auditforge-api-1 python -m pytest -q` → seluruh tes lama tetap lulus.
 
 ---
