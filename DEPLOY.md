@@ -24,10 +24,27 @@ kecuali bagian Tailscale yang bergantung pada server kantor.
 
 ## 1. Siapkan berkas rahasia
 
-Jangan pakai `.env` pengembangan di server. Buat berkas terpisah:
+Jangan pakai `.env` pengembangan di server. Cara termudah:
+
+```bash
+./scripts/buat-env-prod.sh
+```
+
+Skrip itu membuat `.env.prod` berisi nilai acak, menyamakan sandi Postgres di
+kedua tempat yang membutuhkannya, menyetel izin berkas ke `600`, lalu mencetak
+kata sandi admin pertama **satu kali** — catat saat itu juga. Ia menolak
+menimpa berkas yang sudah ada, karena mengganti sandi basis data yang sedang
+dipakai akan memutus koneksi ke data yang sudah tersimpan.
+
+Setelahnya tinggal isi `AI_API_KEY` bila ingin memakai LLM daring; LLM juga
+dapat diatur belakangan lewat panel Admin tanpa build ulang.
+
+<details>
+<summary>Atau isi sendiri dari berkas contoh</summary>
 
 ```bash
 cp .env.example .env.prod
+chmod 600 .env.prod
 ```
 
 Isi setiap baris bertanda `[WAJIB DIGANTI]`. Nilai acak dibuat dengan:
@@ -36,6 +53,12 @@ Isi setiap baris bertanda `[WAJIB DIGANTI]`. Nilai acak dibuat dengan:
 openssl rand -hex 32     # SECRET_KEY
 openssl rand -hex 16     # POSTGRES_PASSWORD, MINIO_SECRET_KEY, SEED_ADMIN_PASSWORD
 ```
+
+**Sandi Postgres harus sama persis** di `POSTGRES_PASSWORD` dan di dalam
+`DATABASE_URL`. Ketidakcocokan di sini membuat API gagal terhubung tanpa
+penjelasan yang jelas.
+
+</details>
 
 Yang wajib diganti:
 
