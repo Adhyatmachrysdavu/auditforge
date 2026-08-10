@@ -45,12 +45,16 @@ docker compose up -d --build
 ./scripts/demo.sh          # muat data contoh
 ```
 
-Lalu buka **<http://localhost:3000>** dan masuk sebagai:
+Lalu buka **<http://localhost:3000>**. Tersedia tiga akun, satu untuk tiap peran:
 
-```
-admin@auditforge.local
-admin12345
-```
+| Surel | Kata sandi | Peran | Boleh apa |
+|---|---|---|---|
+| `admin@auditforge.local` | `admin12345` | admin | Segalanya, termasuk panel Administrasi, jejak audit, dan menghapus penugasan |
+| `auditor@auditforge.local` | `auditor12345` | auditor | Menyetujui, menolak, menandai positif-palsu, membuka Basis Pengetahuan, mengelola anggota tim |
+| `analis@auditforge.local` | `analis12345` | analis | Menyunting naratif dan mengajukan tinjauan, tetapi **tidak** boleh menyetujui |
+
+Mulailah sebagai **admin**. Dua akun lain berguna untuk melihat pembatasan
+peran bekerja, seperti pada langkah 4 di bawah.
 
 > Login memakai **alamat surel**, bukan nama pengguna.
 
