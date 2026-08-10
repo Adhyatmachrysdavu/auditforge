@@ -1,13 +1,17 @@
 """Konfigurasi aplikasi.
 
-Nilai dibaca dari environment (dan berkas .env). Tidak ada rahasia yang
-di-hardcode di dalam kode.
+Nilai dibaca dari environment (dan berkas .env). Nilai bawaan yang ada di sini
+adalah nilai **pengembangan** agar `docker compose up` langsung jalan; di
+lingkungan produksi `assert_production_safe` menolak menyala bila salah satunya
+belum diganti (lihat `core/hardening.py`).
 """
 from __future__ import annotations
 
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from app.core.hardening import INSECURE_DEFAULTS, assert_production_safe
 
 
 class Settings(BaseSettings):
@@ -66,4 +70,11 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    settings = Settings()
+    # Fail-closed: lebih baik gagal menyala daripada menyala dengan kunci yang
+    # nilainya terbit di repositori publik.
+    assert_production_safe(
+        environment=settings.environment,
+        values={name: getattr(settings, name) for name in INSECURE_DEFAULTS},
+    )
+    return settings
