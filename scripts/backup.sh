@@ -47,21 +47,24 @@ BERKAS_OBJ="$TUJUAN/$PREFIX-objek-$CAP.tar.gz"
 
 # Tulis ke berkas `.parsial` dulu lalu ganti nama: bila prosesnya gagal di
 # tengah jalan, yang tertinggal jelas-jelas bukan cadangan yang sah.
-echo "→ Basis data ($KON_DB)…"
+echo "[1/2] Basis data ($KON_DB)…"
 docker exec "$KON_DB" pg_dump -U "$PG_USER" -d "$PG_DB" | gzip > "$BERKAS_DB.parsial"
 mv "$BERKAS_DB.parsial" "$BERKAS_DB"
 
 # Image MinIO tidak memuat `tar`, jadi volume-nya di-mount ke kontainer bantu.
 # Hasilnya dialirkan ke stdout agar tak perlu memetakan direktori host —
 # pemetaan itulah yang menyulitkan di Windows.
-echo "→ Penyimpanan objek (volume $VOL_OBJ)…"
+echo "[2/2] Penyimpanan objek (volume $VOL_OBJ)…"
 docker run --rm -v "$VOL_OBJ:/data:ro" alpine:3 \
     sh -c 'tar czf - -C /data .' > "$BERKAS_OBJ.parsial"
 mv "$BERKAS_OBJ.parsial" "$BERKAS_OBJ"
 
 # Cadangan kosong adalah kegagalan yang paling mahal: ia baru ketahuan saat
 # dibutuhkan. Periksa sekarang, bukan nanti.
-JML_OBJ="$(tar tzf "$BERKAS_OBJ" | wc -l | tr -d ' ')"
+# Arsip dibaca lewat stdin, bukan dengan memberi jalurnya ke tar. GNU tar
+# menyangka awalan "C:" pada jalur Windows absolut sebagai nama host jarak jauh
+# dan gagal dengan "Cannot connect to C: resolve failed".
+JML_OBJ="$(gzip -dc "$BERKAS_OBJ" | tar tf - | wc -l | tr -d ' ')"
 JML_TABEL="$(gzip -dc "$BERKAS_DB" | grep -c 'CREATE TABLE' || true)"
 
 echo

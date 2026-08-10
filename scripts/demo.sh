@@ -48,7 +48,7 @@ if [ "${ADA:-0}" -gt 0 ] && [ "$PAKSA" -eq 0 ]; then
     exit 1
 fi
 
-echo "→ Memuat basis data demo…"
+echo "[1/2] Memuat basis data demo…"
 # client_min_messages=WARNING menahan banjir NOTICE dari DROP CASCADE. Keluaran
 # yang berisik membuat kegagalan sungguhan sulit terlihat di antaranya.
 PGOPT="-c client_min_messages=WARNING"
@@ -57,7 +57,7 @@ docker exec -i -e PGOPTIONS="$PGOPT" "$KON_DB" psql -U "$PG_USER" -d "$PG_DB" -q
 gzip -dc "$DB_DUMP" \
     | docker exec -i -e PGOPTIONS="$PGOPT" "$KON_DB" psql -U "$PG_USER" -d "$PG_DB" -q >/dev/null
 
-echo "→ Memuat berkas scan & lampiran bukti…"
+echo "[2/2] Memuat berkas scan & lampiran bukti…"
 docker run --rm -i -v "$VOL_OBJ:/data" alpine:3 sh -c 'tar xzf - -C /data' < "$OBJ_DUMP"
 # MinIO membaca ulang isi direktori datanya saat mulai; tanpa restart, berkas
 # yang baru disalin belum terlihat olehnya.

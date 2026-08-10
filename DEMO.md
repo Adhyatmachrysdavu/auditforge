@@ -77,7 +77,7 @@ Data demo memuat tiga penugasan:
 
 ### 1. Hasil olahan yang deterministik
 
-Buka **Penugasan → Audit Aplikasi Web Internal 2026 → tab Temuan**.
+Buka **Penugasan**, pilih **Audit Aplikasi Web Internal 2026**, lalu tab **Temuan**.
 
 Lima temuan, terurut prioritas. Perhatikan bahwa setiap baris sudah membawa
 **CWE**, **kategori OWASP**, dan **prioritas** — tidak satu pun diisi manusia,
@@ -164,14 +164,14 @@ naskahnya **ditulis auditor** atau **draf AI yang disetujui**.
 Tiga pengaman menyertainya:
 
 - hanya **auditor dan admin** yang dapat membukanya;
-- setiap penugasan dapat **menolak berbagi** (tab **Tim** → hapus centang
-  *Boleh jadi rujukan Basis Pengetahuan*), dan penolakan itu **berlaku surut** —
+- setiap penugasan dapat **menolak berbagi** lewat tab **Tim**, dengan menghapus
+  centang *Boleh jadi rujukan Basis Pengetahuan*. Penolakan itu **berlaku surut**:
   naratif yang sudah terlanjur masuk pun langsung berhenti tampil;
 - **setiap pembukaan halaman ini tercatat** pada jejak audit
-  (**Administrasi → Jejak Audit**).
+  (menu **Administrasi**, bagian **Jejak Audit**).
 
-Untuk melihat kegunaannya: buka penugasan #19 → temuan Log4Shell → **Lihat** →
-**Saran Rujukan**. Sistem menemukan naratif Log4Shell dari penugasan #17 dan #18
+Untuk melihat kegunaannya, buka penugasan #19, pilih temuan Log4Shell, tekan
+**Lihat**, lalu **Saran Rujukan**. Sistem menemukan naratif Log4Shell dari penugasan #17 dan #18
 dengan skor kemiripan 100%, dan menawarkan **Pakai Naratif Ini**. Penerapannya
 dicatat sebagai **suntingan auditor**, bukan draf AI — karena naskahnya memang
 berasal dari manusia yang telah menyetujuinya di penugasan lain.
@@ -184,8 +184,8 @@ Halaman ini mengukur waktu kerja **manusia** pada tiap penugasan dan
 membandingkannya dengan estimasi penyusunan manual yang dimasukkan auditor:
 
 ```
-#17  1.51 jam  vs baseline 6 jam   → hemat 74.9%
-#18  0.86 jam  vs baseline 6 jam   → hemat 85.7%
+#17  1.51 jam  vs baseline 6 jam   hemat 74.9%
+#18  0.86 jam  vs baseline 6 jam   hemat 85.7%
 ```
 
 Yang dihitung adalah waktu kerja aktif, bukan waktu kalender: selisih antar
@@ -218,14 +218,14 @@ cp datasets/fixtures/nmap-sample.xml datasets/watch/inbox/19/
 
 Tunggu sekitar **30–40 detik** (penjadwal memindai tiap 30 detik), lalu:
 
-- buka **Ingest** di bilah sisi — berkasnya muncul dengan asal **otomatis**,
+- buka **Ingest** di bilah sisi. Berkasnya muncul dengan asal **otomatis**,
   perkakas terdeteksi `nmap`, status `parsed`;
-- buka penugasan #19 → tab **Temuan** — empat temuan baru muncul, masing-masing
+- buka penugasan #19, tab **Temuan**. Empat temuan baru muncul, masing-masing
   sudah bertriase. Perhatikan bahwa hanya `Nmap script: ssl-heartbleed` yang
   memperoleh CWE (CWE-125, prioritas P1); tiga sisanya berupa daftar port
   terbuka dan **dibiarkan tanpa CWE**, karena memang tak ada padanannya. Sistem
   mengosongkan yang tak dapat dipetakan alih-alih mengarang;
-- periksa foldernya: berkas tadi sudah **pindah sendiri** dari `inbox/` ke
+- periksa foldernya. Berkas tadi sudah **pindah sendiri** dari `inbox/` ke
   `processed/19/`.
 
 ```bash
@@ -261,7 +261,7 @@ membuka tab Berkas tiap penugasan satu per satu.
 | **Ingest** | Parser Nuclei, ZAP, Nmap, Burp, SARIF; deteksi perkakas otomatis; unggah manual + folder terpantau; tolak duplikat; urai ulang berkas gagal |
 | **Pengolahan deterministik** | Normalisasi keparahan, dedup lintas berkas & lintas perkakas dalam satu penugasan, pemetaan CWE/OWASP, hitung CVSS v3.1, tautan CVE, triase P1–P4 |
 | **AI (draf saja)** | Naratif per temuan + ringkasan eksekutif; provider bebas (OpenRouter, OpenAI, Ollama lokal, Claude); model dapat diganti dari panel Admin tanpa build ulang; seluruh prompt melewati penyamaran |
-| **Review** | Alur status draf → ditinjau → disetujui/ditolak/positif-palsu; penyunting naratif; riwayat revisi; perbandingan AI vs auditor; lampiran bukti; papan Kanban |
+| **Review** | Alur status draf, ditinjau, lalu disetujui/ditolak/positif-palsu; penyunting naratif; riwayat revisi; perbandingan AI vs auditor; lampiran bukti; papan Kanban |
 | **Pengelolaan penugasan** | Periode, cakupan, anggota tim; akses dibatasi keanggotaan; hapus penugasan (admin, dengan konfirmasi nama) |
 | **Basis Pengetahuan** | Rujukan naratif lintas penugasan, saran otomatis per temuan, terapkan sebagai suntingan auditor, opt-out per penugasan, akses baca tercatat |
 | **Laporan** | DOCX, PDF, pratinjau HTML; kop berkop klien/periode/cakupan; distribusi keparahan; matriks risiko; hanya temuan disetujui |
