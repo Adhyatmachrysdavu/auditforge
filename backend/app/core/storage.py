@@ -54,3 +54,27 @@ def remove_object(key: str) -> None:
         get_minio().remove_object(s.minio_bucket, key)
     except Exception:  # noqa: BLE001,S110 — penghapusan storage tak boleh meng-crash API
         pass
+
+
+def remove_prefix(prefix: str) -> int:
+    """Hapus seluruh objek berawalan `prefix`; kembalikan jumlah yang terhapus.
+
+    Dipakai saat penugasan dihapus. Tanpa ini berkas scan mentah dan lampiran
+    bukti milik klien tetap tersimpan di disk meski penugasannya sudah tak ada
+    di basis data — data yang tak terjangkau aplikasi tetapi tetap ada, dan itu
+    sulit dipertanggungjawabkan pada sistem yang menjanjikan sebaliknya.
+
+    Best-effort seperti `remove_object`: kegagalan penyimpanan tak boleh
+    membatalkan penghapusan yang sudah dilakukan di basis data.
+    """
+    s = get_settings()
+    dihapus = 0
+    try:
+        client = get_minio()
+        for obj in client.list_objects(s.minio_bucket, prefix=prefix, recursive=True):
+            if obj.object_name:
+                client.remove_object(s.minio_bucket, obj.object_name)
+                dihapus += 1
+    except Exception:  # noqa: BLE001,S110 — lihat alasan di remove_object
+        pass
+    return dihapus

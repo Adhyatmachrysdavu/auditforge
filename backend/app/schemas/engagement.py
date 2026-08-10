@@ -61,6 +61,23 @@ class EngagementDetailsIn(BaseModel):
     kb_shareable: bool = True
 
 
+class EngagementDeleteIn(BaseModel):
+    """Konfirmasi penghapusan: nama penugasan diketik ulang persis."""
+
+    confirm_name: str
+
+
+class EngagementDeleteOut(BaseModel):
+    """Apa saja yang benar-benar terhapus, agar dapat diperiksa kemudian."""
+
+    engagement_id: int
+    name: str
+    findings: int
+    uploads: int
+    knowledge_entries: int
+    storage_objects: int
+
+
 class BaselineIn(BaseModel):
     """Angka pembanding waktu penyusunan manual (Modul 1)."""
 

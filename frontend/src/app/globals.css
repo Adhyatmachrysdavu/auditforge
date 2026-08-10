@@ -156,6 +156,18 @@ body {
   border-color: var(--primary);
   color: var(--primary);
 }
+/* Tindakan merusak (hapus penugasan). Sengaja tidak semencolok tombol utama:
+   ia harus terbaca sebagai peringatan, bukan sebagai ajakan menekan. */
+.btn.danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+.btn.danger:disabled {
+  background: color-mix(in srgb, var(--danger) 35%, transparent);
+  border-color: transparent;
+  cursor: not-allowed;
+}
 .badge {
   display: inline-flex;
   gap: 6px;

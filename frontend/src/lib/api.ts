@@ -521,6 +521,22 @@ export const listKnowledge = (q?: string, cwe?: string) => {
   return req<{ items: KnowledgeEntry[] }>(`/knowledge${qs ? `?${qs}` : ""}`);
 };
 
+/** Hapus penugasan beserta seluruh isinya. Admin saja; tak dapat dibatalkan. */
+export interface EngagementDeleted {
+  engagement_id: number;
+  name: string;
+  findings: number;
+  uploads: number;
+  knowledge_entries: number;
+  storage_objects: number;
+}
+export const deleteEngagement = (id: number, confirmName: string) =>
+  req<EngagementDeleted>(`/engagements/${id}`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ confirm_name: confirmName }),
+  });
+
 export interface KnowledgeSuggestion {
   entry: KnowledgeEntry;
   /** 0..1 — bobot besar pada kesamaan CWE, sisanya irisan token judul. */

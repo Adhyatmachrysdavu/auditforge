@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.access import can_access_engagement
 from app.api.deps import get_current_user, require_roles
-from app.core.storage import get_bytes, put_bytes, remove_object
+from app.core.storage import get_bytes, put_bytes, remove_object, remove_prefix
 from app.db.session import get_db
 from app.eval.engagement_eval import evaluate_engagement
 from app.eval.timing import timing_summary
@@ -31,6 +31,7 @@ from app.models.finding import Finding, FindingAttachment, FindingRevision
 from app.models.knowledge_entry import KnowledgeEntry
 from app.models.scan_upload import ScanUpload
 from app.models.user import User
+from app.purge import confirmation_matches, storage_prefixes
 from app.reporting.branding import load_branding
 from app.reporting.docx_writer import render_docx
 from app.reporting.filenames import ascii_fallback, content_disposition
@@ -43,6 +44,8 @@ from app.schemas.engagement import (
     AttachmentOut,
     BaselineIn,
     EngagementCreate,
+    EngagementDeleteIn,
+    EngagementDeleteOut,
     EngagementDetailOut,
     EngagementDetailsIn,
     EngagementOut,
@@ -220,6 +223,90 @@ def set_engagement_details(
         "period_end": eng.period_end.isoformat() if eng.period_end else None,
         "kb_shareable": eng.kb_shareable,
     }
+
+
+@router.delete("/{engagement_id}", response_model=EngagementDeleteOut)
+def delete_engagement(
+    engagement_id: int,
+    payload: EngagementDeleteIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles("admin")),
+) -> EngagementDeleteOut:
+    """Hapus penugasan beserta seluruh isinya. **Tak dapat dibatalkan.**
+
+    Hanya administrator, dan nama penugasan harus diketik ulang persis — yang
+    diminta bukan sekadar persetujuan, melainkan bukti bahwa penghapusnya
+    membaca penugasan mana yang akan hilang.
+
+    Berkas mentah dan lampiran bukti di MinIO ikut dihapus; membiarkannya
+    berarti data klien tetap ada di disk meski penugasannya sudah tiada.
+    Jejak audit sengaja dipertahankan — ia justru catatan bahwa ini terjadi.
+    """
+    eng = _get_engagement(db, engagement_id, user)
+    if not confirmation_matches(eng.name, payload.confirm_name):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f'Ketik ulang nama penugasan dengan tepat: "{eng.name}"',
+        )
+
+    nama = eng.name
+    finding_ids = list(
+        db.scalars(select(Finding.id).where(Finding.engagement_id == engagement_id)).all()
+    )
+    jml_temuan = len(finding_ids)
+    jml_unggahan = int(
+        db.scalar(
+            select(func.count()).select_from(ScanUpload).where(
+                ScanUpload.engagement_id == engagement_id
+            )
+        )
+        or 0
+    )
+    jml_kb = int(
+        db.scalar(
+            select(func.count()).select_from(KnowledgeEntry).where(
+                KnowledgeEntry.source_engagement_id == engagement_id
+            )
+        )
+        or 0
+    )
+
+    # Urutan mengikuti app/purge.py: anak sebelum induk.
+    if finding_ids:
+        db.query(FindingRevision).filter(
+            FindingRevision.finding_id.in_(finding_ids)
+        ).delete(synchronize_session=False)
+        db.query(FindingAttachment).filter(
+            FindingAttachment.finding_id.in_(finding_ids)
+        ).delete(synchronize_session=False)
+    db.query(KnowledgeEntry).filter(
+        KnowledgeEntry.source_engagement_id == engagement_id
+    ).delete(synchronize_session=False)
+    db.query(Finding).filter(Finding.engagement_id == engagement_id).delete(
+        synchronize_session=False
+    )
+    db.query(ScanUpload).filter(ScanUpload.engagement_id == engagement_id).delete(
+        synchronize_session=False
+    )
+    db.query(EngagementMember).filter(
+        EngagementMember.engagement_id == engagement_id
+    ).delete(synchronize_session=False)
+    db.delete(eng)
+    db.commit()
+
+    # Penyimpanan dibersihkan setelah basis data berhasil: bila MinIO bermasalah,
+    # yang tertinggal hanyalah berkas yatim — bukan penugasan yang isinya hilang
+    # separuh.
+    jml_objek = sum(remove_prefix(p) for p in storage_prefixes(engagement_id))
+
+    return EngagementDeleteOut(
+        engagement_id=engagement_id,
+        name=nama,
+        findings=jml_temuan,
+        uploads=jml_unggahan,
+        knowledge_entries=jml_kb,
+        storage_objects=jml_objek,
+    )
 
 
 def _member_out(m: EngagementMember, u: User) -> MemberOut:

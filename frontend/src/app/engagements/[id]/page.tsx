@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import {
   ArrowClockwise,
   ClockCounterClockwise,
@@ -13,6 +13,7 @@ import {
   PencilSimple,
   Sliders,
   Sparkle,
+  Trash,
   UploadSimple,
 } from "@phosphor-icons/react";
 import { AppShell } from "@/components/AppShell";
@@ -77,6 +78,7 @@ export default function EngagementDetailPage() {
   const { t, locale } = useI18n();
   const { user } = useAuth();
   const params = useParams();
+  const router = useRouter();
   const id = Number(Array.isArray(params.id) ? params.id[0] : params.id);
   const canApprove = !!user && APPROVER_ROLES.includes(user.role);
   // Saran rujukan memuat naratif penugasan klien lain — batasnya sama dengan
@@ -102,6 +104,9 @@ export default function EngagementDetailPage() {
   // Pesan tersendiri: `baseMsg` khusus baseline di tab Ringkasan, memakainya
   // di sini membuat pesan muncul di tab yang salah.
   const [teamMsg, setTeamMsg] = useState<string | null>(null);
+  // --- Penghapusan penugasan (admin) ---
+  const [delConfirm, setDelConfirm] = useState("");
+  const [delBusy, setDelBusy] = useState(false);
   const [genBusy, setGenBusy] = useState(false);
   const [triBusy, setTriBusy] = useState(false);
   const [narrMsg, setNarrMsg] = useState<string | null>(null);
@@ -348,8 +353,12 @@ export default function EngagementDetailPage() {
     try {
       setDetail(await api.getFinding(id, fid));
       await loadAttachments(fid);
-    } catch {
-      /* abaikan */
+    } catch (err) {
+      // Sebelumnya galat ini ditelan diam-diam: panel tak terbuka dan layar
+      // tak memberi tanda apa pun, sehingga satu-satunya cara mengetahui
+      // penyebabnya adalah membuka konsol peramban.
+      setOpenId(null);
+      setError(err instanceof ApiError ? err.message : String(err));
     }
   }
 
@@ -367,6 +376,21 @@ export default function EngagementDetailPage() {
     });
     setReviewMsg(null);
     setEditing(true);
+  }
+
+  async function deleteEngagement() {
+    if (!eng) return;
+    setDelBusy(true);
+    setError(null);
+    try {
+      await api.deleteEngagement(id, delConfirm.trim());
+      // Penugasannya sudah tak ada; bertahan di halaman ini hanya menghasilkan
+      // 404 beruntun.
+      router.replace("/engagements");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : String(err));
+      setDelBusy(false);
+    }
   }
 
   async function applySuggestion(fid: number, entryId: number) {
@@ -437,8 +461,8 @@ export default function EngagementDetailPage() {
     try {
       setRevs(await api.getRevisions(id, fid));
       setShowHist(true);
-    } catch {
-      /* abaikan */
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : String(err));
     }
   }
 
@@ -1778,6 +1802,30 @@ export default function EngagementDetailPage() {
             )}
             {teamMsg && <div className="alert ok">{teamMsg}</div>}
           </section>
+
+          {/* Penghapusan penugasan — administrator saja, dan tak dapat dibatalkan. */}
+          {user?.role === "admin" && (
+            <section className="card">
+              <h3 style={{ marginTop: 0 }}>{t("danger.title")}</h3>
+              <p className="muted">{t("danger.hint")}</p>
+              <label className="field">
+                <span>{t("danger.typeName")}</span>
+                <input
+                  value={delConfirm}
+                  placeholder={eng?.name ?? ""}
+                  onChange={(e) => setDelConfirm(e.target.value)}
+                />
+              </label>
+              <button
+                className="btn danger"
+                disabled={delBusy || !eng || delConfirm.trim() !== (eng?.name ?? "")}
+                onClick={() => deleteEngagement()}
+              >
+                <Trash size={15} />{" "}
+                {delBusy ? t("danger.deleting") : t("danger.delete")}
+              </button>
+            </section>
+          )}
         </>
       )}
     </AppShell>
