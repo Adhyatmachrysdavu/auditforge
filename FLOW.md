@@ -200,6 +200,39 @@ Baris yang memenuhi syarat punya tombol **Urai Ulang** yang sama dengan di tab B
 
 ---
 
+## D2. Basis Pengetahuan Temuan dan pencarian lintas penugasan
+
+Naratif yang sudah **disetujui** tidak berhenti di satu laporan — ia menjadi rujukan untuk
+penugasan berikutnya, sehingga kerentanan yang sama tak perlu ditulis ulang dari nol.
+
+→ **Buka:** sidebar **Temuan**. Halaman ini punya dua tab.
+
+**Tab Temuan** — pencarian temuan pada **seluruh penugasan yang menjadi tanggung jawabmu**,
+dengan penyaring **kata kunci judul**, **keparahan**, dan **status**. Kolom penugasan tertaut
+langsung ke halaman penugasannya. Analis hanya melihat penugasan tempat ia terdaftar sebagai
+anggota tim; administrator melihat semua.
+
+**Tab Basis Pengetahuan** — hanya muncul untuk **auditor dan administrator**. Berisi kartu
+naratif dari temuan yang telah disetujui, lengkap dengan **penugasan dan klien asalnya**,
+berapa kali entri itu **dipakai**, serta penanda apakah naskahnya **ditulis auditor** atau
+**draf AI yang disetujui apa adanya**.
+
+Tiga hal yang perlu diketahui tentang tab ini:
+
+1. Entri lahir **otomatis** saat sebuah temuan berpindah ke status **Disetujui**.
+2. Penugasan dapat **menolak berbagi**: buka tab **Tim** penugasan itu, hapus centang
+   **Boleh jadi rujukan Basis Pengetahuan**, lalu **Simpan Kelengkapan**. Temuan yang
+   disetujui di sana tidak akan pernah masuk. Saklar ini menghormati NDA yang melarang data
+   klien dipakai untuk keperluan lain sekalipun internal.
+3. **Setiap pembukaan tab ini tercatat** pada jejak audit (**Administrasi → Jejak Audit**).
+   Bila klien bertanya siapa saja yang pernah melihat temuan mereka, jawabannya tersedia.
+
+Naratif dari sebuah entri dapat dipakai sebagai titik awal temuan lain. Penerapannya dicatat
+sebagai **suntingan auditor**, **bukan** draf AI — naskah itu memang berasal dari manusia
+yang telah menyetujuinya di penugasan lain.
+
+---
+
 ## E. Batas AI ↔ Manusia ↔ Deterministik
 
 - **Deterministik** (parse → normalisasi → enrichment → dedup → triase) — logika pasti,

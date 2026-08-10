@@ -32,6 +32,19 @@ router = APIRouter(prefix="/knowledge", tags=["knowledge"])
 _KB_ROLES = ("auditor", "admin")
 
 
+def _shareable_only(stmt):
+    """Sisakan entri dari penugasan yang **masih** boleh menjadi rujukan.
+
+    `kb_shareable` dijaga saat entri dibuat, tetapi itu belum cukup: NDA sering
+    baru berlaku setelah pekerjaan berjalan. Tanpa penyaringan di sisi baca,
+    mematikan saklar tidak menyembunyikan naratif yang terlanjur masuk — dan
+    saklar yang tak berlaku surut bukan penghormatan atas kontrak.
+    """
+    return stmt.join(
+        Engagement, KnowledgeEntry.source_engagement_id == Engagement.id
+    ).where(Engagement.kb_shareable.is_(True))
+
+
 def _log_read(
     db: Session, request: Request, user: User, *, detail: str, entity_id: str | None
 ) -> None:
@@ -91,7 +104,7 @@ def list_knowledge(
     user: User = Depends(require_roles(*_KB_ROLES)),
 ) -> dict:
     """Telusuri Basis Pengetahuan. Akses baca dicatat pada jejak audit."""
-    stmt = select(KnowledgeEntry).order_by(
+    stmt = _shareable_only(select(KnowledgeEntry)).order_by(
         KnowledgeEntry.usage_count.desc(), KnowledgeEntry.id.desc()
     )
     if cwe:
@@ -132,7 +145,9 @@ def suggest_knowledge(
     # Entri dari temuan itu sendiri bukan saran yang berguna.
     candidates = list(
         db.scalars(
-            select(KnowledgeEntry).where(KnowledgeEntry.source_finding_id != finding_id)
+            _shareable_only(select(KnowledgeEntry)).where(
+                KnowledgeEntry.source_finding_id != finding_id
+            )
         ).all()
     )
     ranked = rank_matches(target, candidates, limit=max(1, min(limit, 20)))
