@@ -66,11 +66,25 @@ body {
 }
 
 /* ---------- Sidebar (navy) ---------- */
+/* Sidebar menggulir sendiri, terpisah dari isi halaman. Tanpa ini navigasi
+   ikut terdorong ke atas saat halaman panjang digulir, dan pada tab Temuan
+   yang bisa memuat puluhan kartu, seluruh menu hilang dari layar.
+   `align-self: start` wajib: butir grid meregang setinggi barisnya secara
+   bawaan, dan butir yang setinggi induknya tak punya ruang untuk melekat,
+   sehingga `position: sticky` diam saja tanpa galat. */
 .sidebar {
   background: linear-gradient(180deg, var(--navy-1), var(--navy-2));
   color: #cbd5e1;
   padding: 18px 14px;
   border-radius: 0 30px 0 0;
+  position: sticky;
+  top: 0;
+  align-self: start;
+  height: 100vh;
+  /* Bila tingginya tak cukup (jendela pendek atau menu bertambah), menu
+     bergulir di dalam sidebar, bukan terpotong. */
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .brand {
   color: #fff;
