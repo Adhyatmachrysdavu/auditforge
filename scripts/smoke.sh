@@ -17,6 +17,10 @@
 # Keduanya akan tertangkap skrip ini dalam hitungan detik. Ini bukan pengganti
 # pytest, melainkan gerbang terakhir sebelum merge dan setelah deploy.
 #
+# Bagian terakhir keluar dari lapisan route: ia membandingkan aturan pengenalan
+# perkakas di frontend dengan yang di backend. Bagian itu butuh kontainer lokal,
+# dan akan menandai dirinya "lewat" bila tak ada — bukan diam-diam lulus.
+#
 # Keluar dengan kode 1 bila ada satu saja pemeriksaan gagal.
 
 set -uo pipefail
@@ -24,6 +28,8 @@ set -uo pipefail
 BASE="${1:-http://localhost:8000}"
 EMAIL="${2:-admin@auditforge.local}"
 SANDI="${3:-admin12345}"
+
+AKAR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 LULUS=0
 GAGAL=0
@@ -46,6 +52,84 @@ cek() {
         GAGAL=$((GAGAL + 1))
         printf '  \033[31mGAGAL\033[0m %s %s -> %s (harap %s)\n' "$metode" "$jalur" "$kode" "$harap"
     fi
+}
+
+cek_sniff() {
+    local fx="$AKAR/datasets/fixtures"
+    # Dilewati harus TERLIHAT, bukan dianggap lulus: skrip ini juga dipakai
+    # menembak server jarak jauh, dan di sana kontainernya memang tak ada.
+    if [ ! -d "$fx" ]; then
+        printf '  \033[33mlewat\033[0m  %s tak ada\n' "$fx"
+        return
+    fi
+    for k in auditforge-api-1 auditforge-web-1; do
+        if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$k"; then
+            printf '  \033[33mlewat\033[0m  kontainer %s tak berjalan\n' "$k"
+            return
+        fi
+    done
+
+    # Git Bash mengubah jalur mirip Unix pada argumen docker; di Linux tak berefek.
+    # Ia mematikan konversi untuk KEDUA sisi, dan itu yang menjebak: tujuan di
+    # dalam kontainer memang harus dibiarkan apa adanya, tetapi jalur sumber di
+    # host justru butuh dikonversi. Karena itu sumbernya ditulis relatif dari
+    # akar repo — jalur relatif tak pernah disentuh MSYS.
+    export MSYS_NO_PATHCONV=1
+    local tmp=/tmp/af-sniff-fx
+    for k in auditforge-api-1 auditforge-web-1; do
+        # Hapus dulu: `docker cp` ke direktori yang sudah ada akan menyarangkan
+        # salinannya (…/af-sniff-fx/fixtures) alih-alih menimpanya.
+        docker exec "$k" rm -rf "$tmp" >/dev/null 2>&1
+        ( cd "$AKAR" && docker cp datasets/fixtures "$k:$tmp" ) >/dev/null 2>&1 || {
+            printf '  \033[31mGAGAL\033[0m tak dapat menyalin berkas contoh ke %s\n' "$k"
+            GAGAL=$((GAGAL + 1))
+            return
+        }
+    done
+
+    local be fe
+    be=$(docker exec -i auditforge-api-1 python - <<'PY' 2>/dev/null
+import pathlib
+from app.parsers import select_parser
+for f in sorted(pathlib.Path("/tmp/af-sniff-fx").iterdir()):
+    if f.is_file():
+        t = getattr(select_parser(None, f.name, f.read_bytes()), "tool", None)
+        print(f"{f.name}\t{getattr(t, 'value', None) or '-'}")
+PY
+    )
+    # Node 22 memuat TypeScript langsung dengan --experimental-strip-types,
+    # jadi yang diuji berkas sumber yang sesungguhnya, bukan salinan terkompilasi
+    # yang bisa saja tertinggal versi.
+    fe=$(docker exec -i auditforge-web-1 node --experimental-strip-types - <<'JS' 2>/dev/null
+const fs = require("fs");
+const { sniffTool } = require("/app/src/lib/sniff.ts");
+for (const n of fs.readdirSync("/tmp/af-sniff-fx").sort()) {
+  const p = "/tmp/af-sniff-fx/" + n;
+  if (!fs.statSync(p).isFile()) continue;
+  console.log(n + "\t" + (sniffTool(n, fs.readFileSync(p, "utf8")) || "-"));
+}
+JS
+    )
+
+    if [ -z "$be" ] || [ -z "$fe" ]; then
+        printf '  \033[31mGAGAL\033[0m salah satu sisi tak menghasilkan keluaran\n'
+        GAGAL=$((GAGAL + 1))
+        return
+    fi
+
+    local nama sisi_be sisi_fe
+    while IFS=$'\t' read -r nama sisi_be; do
+        [ -n "$nama" ] || continue
+        sisi_fe=$(printf '%s\n' "$fe" | awk -F'\t' -v n="$nama" '$1==n {print $2}')
+        if [ "$sisi_be" = "$sisi_fe" ]; then
+            LULUS=$((LULUS + 1))
+            printf '  \033[32mok\033[0m   %-28s %s\n' "$nama" "$sisi_be"
+        else
+            GAGAL=$((GAGAL + 1))
+            printf '  \033[31mGAGAL\033[0m %-28s backend=%s frontend=%s\n' \
+                "$nama" "$sisi_be" "${sisi_fe:-(tak ada)}"
+        fi
+    done <<< "$be"
 }
 
 echo "AuditForge — pemeriksaan asap terhadap $BASE"
@@ -114,6 +198,17 @@ echo
 echo "Penolakan yang harus tetap berlaku"
 cek 404 GET "/engagements/99999"
 cek 400 DELETE "/engagements/$EID" '{"confirm_name":"salah"}'
+
+echo
+# Aturan pengenalan perkakas hidup di DUA tempat: `backend/app/parsers/*.sniff`
+# dan `frontend/src/lib/sniff.ts`. Yang kedua meniru yang pertama agar dropdown
+# unggah terisi sendiri sebelum berkas dikirim. Penyimpangan di antara keduanya
+# tidak akan meruntuhkan apa pun — dropdown hanya menampilkan tebakan keliru
+# sementara backend mengurai dengan benar — dan justru itu yang membuatnya
+# berbahaya: tak ada galat, tak ada tes yang jatuh, tak ada yang menyadarinya.
+# Di sini keduanya dijalankan atas berkas contoh yang sama lalu dibandingkan.
+echo "Kesepadanan pengenalan perkakas (frontend vs backend)"
+cek_sniff
 
 echo
 echo "  $LULUS lulus, $GAGAL gagal"

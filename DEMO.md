@@ -36,7 +36,7 @@ sekitar 4 GB, dan ruang disk ~5 GB. Build pertama memakan **10–15 menit** kare
 seluruh image dibangun dari nol; setelahnya penyalaan hanya beberapa detik.
 
 ```bash
-git clone https://github.com/davuchrys/auditforge.git
+git clone https://github.com/Adhyatmachrysdavu/auditforge.git
 cd auditforge
 
 cp .env.example .env
