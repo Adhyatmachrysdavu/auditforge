@@ -76,7 +76,10 @@ body {
   background: linear-gradient(180deg, var(--navy-1), var(--navy-2));
   color: #cbd5e1;
   padding: 18px 14px;
-  border-radius: 0 30px 0 0;
+  /* Sudut kanan atas dibiarkan siku. Sejak topbar melebar rata ke tepi atas,
+     lengkung di sini menyisakan baji terang di antara dua bidang navy dan
+     terbaca sebagai sambungan yang gagal, bukan sebagai lengkung yang
+     disengaja. Sisi bawah tetap lurus karena sidebar setinggi layar. */
   position: sticky;
   top: 0;
   align-self: start;
@@ -120,19 +123,27 @@ body {
 
 /* ---------- Konten ---------- */
 .main {
-  padding: 14px 22px 40px;
+  /* Tanpa padding atas: topbar menempel rata ke tepi layar. Jarak untuk isi
+     halaman diberikan oleh margin bawah topbar. */
+  padding: 0 22px 40px;
 }
+/* Topbar melebar sampai tepi jendela dan melekat di baris nol. Sebelumnya ia
+   berupa kartu melayang pada `top: 12px`, sehingga saat halaman digulir ada
+   celah 12 piksel dan lengkung sudut yang meloloskan isi halaman lewat di
+   atasnya — bar-nya jadi tampak menutupi konten, bukan menaunginya. Margin
+   negatif membatalkan padding samping `.main`, dan padding kiri/kanan 40px
+   mengembalikan teks ke garis yang sama seperti sebelumnya (22px + 18px). */
 .topbar {
   background: var(--navy-1);
   color: #fff;
-  border-radius: var(--radius-card);
   box-shadow: var(--shadow-1);
-  padding: 12px 18px;
+  margin: 0 -22px 14px;
+  padding: 12px 40px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   position: sticky;
-  top: 12px;
+  top: 0;
   z-index: 20;
 }
 .card {
