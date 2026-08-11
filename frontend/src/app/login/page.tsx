@@ -12,7 +12,10 @@ export default function LoginPage() {
   const { user, signIn } = useAuth();
   const { t, locale, toggleLocale } = useI18n();
   const router = useRouter();
-  const [email, setEmail] = useState("admin@auditforge.local");
+  // Dikosongkan dengan sengaja. Mengisi otomatis akun seed membuat kredensial
+  // bawaan terlihat seperti cara masuk yang normal, dan di server sungguhan
+  // akun itu tidak ada.
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -52,6 +55,7 @@ export default function LoginPage() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
+            autoFocus
             autoComplete="username"
           />
         </label>
