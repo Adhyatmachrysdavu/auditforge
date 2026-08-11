@@ -197,9 +197,18 @@ export default function EngagementDetailPage() {
     }
   }, [tab, loadTeam]);
 
-  // Isi formulir kelengkapan begitu data penugasan termuat.
+  // Isi formulir kelengkapan begitu data penugasan termuat, tetapi HANYA
+  // sekali per penugasan. `refresh()` memanggil `setEng` dengan objek baru,
+  // dan penyegaran itu berjalan tiap 1,5 detik selama berkas diurai serta tiap
+  // 4 detik selama naratif/ringkasan dibuat. Bila efek ini ikut setiap objek
+  // `eng`, penyegaran latar menimpa suntingan yang belum disimpan: centang
+  // kb_shareable kembali ke nilai server, lalu tombol Simpan mengirim nilai
+  // lama itu sambil tetap melaporkan "tersimpan". Cakupan yang sedang diketik
+  // pun hilang di tengah kalimat.
+  const seededRef = useRef<number | null>(null);
   useEffect(() => {
-    if (!eng) return;
+    if (!eng || seededRef.current === eng.id) return;
+    seededRef.current = eng.id;
     setScope(eng.scope ?? "");
     setPeriodStart(eng.period_start ?? "");
     setPeriodEnd(eng.period_end ?? "");
