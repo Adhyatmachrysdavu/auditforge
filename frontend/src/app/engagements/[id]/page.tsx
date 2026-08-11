@@ -22,8 +22,13 @@ import { useI18n } from "@/i18n/LocaleProvider";
 import type { MessageKey } from "@/i18n/messages";
 import * as api from "@/lib/api";
 import { ApiError } from "@/lib/api";
+import { sniffFile } from "@/lib/sniff";
 
-const TOOLS = ["nuclei", "zap", "nmap", "burp", "sarif", "unknown"];
+// `unknown` disebut lebih dulu dan dilabeli "Deteksi otomatis": itulah satu-
+// satunya nilai yang membuat backend mengenali perkakasnya sendiri. Bawaannya
+// dulu `nuclei`, sehingga berkas Nmap yang diunggah tanpa menyentuh dropdown
+// diurai sebagai Nuclei lalu gagal — padahal sistem sanggup mengenalinya.
+const TOOLS = ["unknown", "nuclei", "zap", "nmap", "burp", "sarif"];
 const SEV_ORDER = ["critical", "high", "medium", "low", "info"];
 const SEV_RANK: Record<string, number> = Object.fromEntries(
   SEV_ORDER.map((s, i) => [s, i])
@@ -90,7 +95,14 @@ export default function EngagementDetailPage() {
   const [reparsingId, setReparsingId] = useState<number | null>(null);
   const [findings, setFindings] = useState<api.Finding[]>([]);
   const [file, setFile] = useState<File | null>(null);
-  const [tool, setTool] = useState("nuclei");
+  const [tool, setTool] = useState("unknown");
+  // Status pengenalan berkas terpilih: "idle" belum ada berkas, "reading"
+  // sedang dibaca, "hit" dikenali, "miss" tak dikenali, "manual" ditimpa
+  // pengguna. Dipisah dari `tool` agar catatan di bawah dropdown menerangkan
+  // dari mana nilainya berasal, bukan sekadar menampilkan nilainya.
+  const [toolDetect, setToolDetect] = useState<
+    "idle" | "reading" | "hit" | "miss" | "manual"
+  >("idle");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // --- Modul 2: tab Tim ---
@@ -274,6 +286,23 @@ export default function EngagementDetailPage() {
     return () => clearInterval(iv);
   }, [uploads, refresh]);
 
+  // Kenali perkakas begitu berkas dipilih, agar pengguna tak perlu tahu
+  // keluaran mana milik perkakas mana. Bila tak dikenali, dropdown dibiarkan
+  // pada "Deteksi otomatis" — backend punya isi berkas yang utuh dan masih
+  // bisa menyimpulkannya sendiri, jadi menebak asal di sini hanya merugikan.
+  async function handlePickFile(picked: File | null) {
+    setFile(picked);
+    if (!picked) {
+      setTool("unknown");
+      setToolDetect("idle");
+      return;
+    }
+    setToolDetect("reading");
+    const detected = await sniffFile(picked);
+    setTool(detected ?? "unknown");
+    setToolDetect(detected ? "hit" : "miss");
+  }
+
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!file) return;
@@ -283,6 +312,8 @@ export default function EngagementDetailPage() {
     try {
       await api.uploadScan(id, file, tool);
       setFile(null);
+      setTool("unknown");
+      setToolDetect("idle");
       form.reset();
       await refresh();
     } catch (err) {
@@ -630,19 +661,36 @@ export default function EngagementDetailPage() {
             <span>{t("up.file")}</span>
             <input
               type="file"
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              onChange={(e) => handlePickFile(e.target.files?.[0] ?? null)}
               required
             />
           </label>
           <label className="field">
             <span>{t("up.tool")}</span>
-            <select value={tool} onChange={(e) => setTool(e.target.value)}>
+            <select
+              value={tool}
+              onChange={(e) => {
+                setTool(e.target.value);
+                setToolDetect("manual");
+              }}
+            >
               {TOOLS.map((x) => (
                 <option key={x} value={x}>
-                  {x}
+                  {x === "unknown" ? t("up.toolAuto") : x}
                 </option>
               ))}
             </select>
+            {toolDetect !== "idle" && (
+              <small className="muted">
+                {toolDetect === "reading"
+                  ? t("up.toolReading")
+                  : toolDetect === "hit"
+                    ? t("up.toolDetected")
+                    : toolDetect === "miss"
+                      ? t("up.toolUndetected")
+                      : t("up.toolManual")}
+              </small>
+            )}
           </label>
           <button className="btn" disabled={busy || !file}>
             <UploadSimple size={16} /> {t("up.submit")}
