@@ -1549,38 +1549,46 @@ export default function EngagementDetailPage() {
                                   {detail.remediation_stale && (
                                     <div className="alert warn">{t("retest.stale")}</div>
                                   )}
-                                  <div className="form-row">
-                                    {["fixed", "open", "recurring"].map((s) => (
-                                      <button
-                                        key={s}
-                                        className="btn secondary"
-                                        onClick={() =>
-                                          api
-                                            .setRemediation(id, detail.id, s, remNote || undefined)
-                                            .then(() => {
-                                              setRemNote("");
-                                              return refresh();
-                                            })
-                                            .catch((err) =>
-                                              setError(
-                                                err instanceof ApiError
-                                                  ? err.message
-                                                  : String(err),
-                                              ),
-                                            )
-                                        }
-                                      >
-                                        {t("retest.confirm")}: {t(`retest.st.${s}` as MessageKey)}
-                                      </button>
-                                    ))}
-                                  </div>
-                                  <label className="field">
-                                    <span>{t("retest.note")}</span>
-                                    <input
-                                      value={remNote}
-                                      onChange={(e) => setRemNote(e.target.value)}
-                                    />
-                                  </label>
+                                  {/* Menegaskan status remediasi adalah keputusan, sama seperti
+                                      approve/reject/false-positive di tempat lain pada berkas
+                                      ini — hanya auditor/admin (canApprove), analis hanya
+                                      melihat. */}
+                                  {canApprove && (
+                                    <>
+                                      <div className="form-row">
+                                        {["fixed", "open", "recurring"].map((s) => (
+                                          <button
+                                            key={s}
+                                            className="btn secondary"
+                                            onClick={() =>
+                                              api
+                                                .setRemediation(id, detail.id, s, remNote || undefined)
+                                                .then(() => {
+                                                  setRemNote("");
+                                                  return refresh();
+                                                })
+                                                .catch((err) =>
+                                                  setError(
+                                                    err instanceof ApiError
+                                                      ? err.message
+                                                      : String(err),
+                                                  ),
+                                                )
+                                            }
+                                          >
+                                            {t("retest.confirm")}: {t(`retest.st.${s}` as MessageKey)}
+                                          </button>
+                                        ))}
+                                      </div>
+                                      <label className="field">
+                                        <span>{t("retest.note")}</span>
+                                        <input
+                                          value={remNote}
+                                          onChange={(e) => setRemNote(e.target.value)}
+                                        />
+                                      </label>
+                                    </>
+                                  )}
                                 </section>
                               )}
                             </div>
