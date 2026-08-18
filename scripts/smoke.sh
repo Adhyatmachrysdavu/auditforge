@@ -197,7 +197,15 @@ done
 echo
 echo "Penolakan yang harus tetap berlaku"
 cek 404 GET "/engagements/99999"
-cek 400 DELETE "/engagements/$EID" '{"confirm_name":"salah"}'
+# Hanya bila ada penugasan. Pada basis data yang masih kosong, $EID kosong dan
+# jalurnya menjadi "/engagements/", yang dibalas 308 oleh pengalihan slash —
+# kegagalan palsu yang menyamarkan hasil sesungguhnya.
+if [ -n "$EID" ]; then
+    cek 400 DELETE "/engagements/$EID" '{"confirm_name":"salah"}'
+else
+    printf '  [33mlewat[0m  penolakan hapus (belum ada penugasan)
+'
+fi
 
 echo
 # Aturan pengenalan perkakas hidup di DUA tempat: `backend/app/parsers/*.sniff`

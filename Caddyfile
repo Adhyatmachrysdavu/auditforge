@@ -1,0 +1,57 @@
+# Reverse proxy + HTTPS otomatis untuk AuditForge.
+#
+# Dipakai bersama docker-compose.proxy.yml. Caddy meminta dan memperbarui
+# sertifikat Let's Encrypt sendiri; tak ada certbot, tak ada cron.
+#
+# SITE_ADDRESS menentukan perilakunya:
+#   audit.contoh.com          → HTTPS otomatis, HTTP dialihkan ke HTTPS
+#   http://localhost          → HTTP polos, tanpa ACME (dipakai saat menguji)
+#
+# Berkas ini dipasang read-only ke dalam kontainer; mengubahnya menuntut
+# `docker compose restart caddy`.
+{
+	# Alamat surel untuk Let's Encrypt: dipakai memberitahu bila perpanjangan
+	# gagal. Nilai cadangan WAJIB ada. Tanpa itu, ACME_EMAIL yang kosong
+	# membuat arahan `email` kehilangan argumen dan SELURUH berkas ini gagal
+	# diurai — Caddy lalu menolak menyala, bukan sekadar melewati barisnya.
+	email {$ACME_EMAIL:tak-diisi@invalid.local}
+}
+
+{$SITE_ADDRESS} {
+	encode zstd gzip
+
+	# Seluruh trafik masuk ke frontend Next.js, yang meneruskan /api/* ke
+	# backend lewat jaringan Docker. Jadi hanya satu hulu di sini, dan port
+	# 8000 tak perlu terbuka sama sekali.
+	reverse_proxy web:3000 {
+		# Perakitan PDF memanggil WeasyPrint dan bisa memakan puluhan detik
+		# pada penugasan besar. Bawaan Caddy cukup, tetapi dinaikkan agar
+		# laporan panjang tak terputus di tengah.
+		transport http {
+			read_timeout 300s
+			write_timeout 300s
+		}
+	}
+
+	# Berkas keluaran pemindai bisa besar; Nuclei JSONL beberapa ratus MB itu
+	# wajar. Tanpa batas yang disebut, bawaan Caddy tak membatasi, dan itu
+	# justru mengundang penyalahgunaan bila alamatnya publik.
+	request_body {
+		max_size 512MB
+	}
+
+	header {
+		# Header pengeras dasar. HSTS sengaja TIDAK dipasang di sini: ia
+		# mengunci domain ke HTTPS di peramban selama berbulan-bulan, dan itu
+		# menyakitkan bila domain uji coba ini kelak dipakai untuk hal lain.
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy same-origin
+		-Server
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}

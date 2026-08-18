@@ -1,11 +1,24 @@
 # Memasang AuditForge di server
 
-Panduan ini menjelaskan cara menjalankan AuditForge di server kantor dan
-membukanya lewat **Tailscale**, tanpa domain, tanpa sertifikat, dan tanpa
-membuka port apa pun ke internet.
+Panduan ini menjelaskan cara menjalankan AuditForge di server, lalu
+menerbitkannya lewat **salah satu dari dua jalur**:
 
-Seluruh langkah di bawah sudah dijalankan dan diverifikasi pada 10 Agustus 2026,
-kecuali bagian Tailscale yang bergantung pada server kantor.
+| | Jalur A: Tailscale | Jalur B: domain + HTTPS |
+|---|---|---|
+| Siapa yang bisa membuka | hanya anggota tailnet | siapa pun yang tahu alamatnya |
+| Butuh domain | tidak | ya |
+| Butuh sertifikat | tidak, diurus Tailscale | ya, diurus Caddy otomatis |
+| Port terbuka ke internet | **tidak ada** | 80 dan 443 |
+| Cocok untuk | data klien sungguhan di server kantor | demo dan pengujian ber-alamat |
+
+Pilih satu, bukan keduanya. Untuk data audit klien yang sesungguhnya, Jalur A
+lebih aman karena tak ada apa pun yang menghadap internet. Jalur B dipakai bila
+aplikasinya perlu dibuka orang lain lewat tautan biasa, misalnya untuk demo.
+
+Langkah 1, 2, 3, 5, 6, dan 7 sama untuk keduanya; hanya bagian 4 yang bercabang.
+
+Seluruh langkah di bawah sudah dijalankan dan diverifikasi, kecuali penerbitan
+sertifikat Let's Encrypt yang menuntut domain sungguhan.
 
 ---
 
@@ -13,16 +26,72 @@ kecuali bagian Tailscale yang bergantung pada server kantor.
 
 | | Pengembangan | Server |
 |---|---|---|
-| Perintah | `docker compose up -d` | `docker compose -f docker-compose.yml -f docker-compose.prod.yml …` |
+| Perintah | `docker compose up -d` | `docker compose -f docker-compose.yml -f docker-compose.prod.yml …` (tambah `-f docker-compose.proxy.yml` untuk Jalur B) |
 | Kode | bind-mount dari direktori host | di dalam image (**wajib `--build`**) |
 | Frontend | `next dev`, hot-reload | `next build` + `next start` |
 | Backend | `uvicorn --reload` | `uvicorn --workers 4`, dengan healthcheck |
-| Port terbuka | 3000, 8000, 5432, 6379, 9000, 9101 | **hanya 3000** |
+| Port terbuka | 3000, 8000, 5432, 6379, 9000, 9101 | **hanya 3000**, atau **hanya 80/443** bila memakai Jalur B |
 | Rahasia bawaan | boleh | aplikasi **menolak menyala** |
 
 ---
 
-## 1. Siapkan berkas rahasia
+## 1. Siapkan servernya
+
+Lewati bagian ini bila servernya sudah ada.
+
+### Ukuran mesin
+
+| | |
+|---|---|
+| Sistem | Ubuntu 24.04 LTS |
+| Ukuran | **4 GB RAM / 2 vCPU** |
+| Disk | 80 GB cukup |
+
+Jangan ambil yang 2 GB. Bukan aplikasinya yang berat, melainkan `next build`
+saat pembangunan image frontend: pada 2 GB ia terbunuh di tengah jalan, dan
+pesannya hanya `exit code 137` tanpa keterangan apa pun. Dengan kredit
+DigitalOcean $200 dari GitHub Student Pack, ukuran ini bertahan sekitar
+delapan bulan.
+
+Tambahkan kunci SSH saat membuat droplet; jangan memakai sandi.
+
+### Pasang Docker dan swap
+
+```bash
+ssh root@ALAMAT-IP
+
+apt update && apt -y upgrade
+curl -fsSL https://get.docker.com | sh
+```
+
+Lalu buat swap 2 GB. Ini bukan hiasan: build frontend memakai memori jauh di
+atas kebutuhan aplikasi saat berjalan, dan swap-lah yang menahannya agar tak
+terbunuh.
+
+```bash
+fallocate -l 2G /swapfile
+chmod 600 /swapfile
+mkswap /swapfile
+swapon /swapfile
+echo '/swapfile none swap sw 0 0' >> /etc/fstab
+```
+
+Pastikan keduanya benar:
+
+```bash
+docker --version && free -h | grep -i swap
+```
+
+### Ambil kodenya
+
+```bash
+git clone https://github.com/Adhyatmachrysdavu/auditforge.git
+cd auditforge
+```
+
+---
+
+## 2. Siapkan berkas rahasia
 
 Jangan pakai `.env` pengembangan di server. Cara termudah:
 
@@ -89,7 +158,7 @@ chmod 600 .env.prod
 
 ---
 
-## 2. Nyalakan
+## 3. Nyalakan
 
 ```bash
 export ENV_FILE=.env.prod
@@ -142,7 +211,9 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml logs api | tail 
 
 ---
 
-## 3. Buka lewat Tailscale
+## 4. Menerbitkan aplikasinya
+
+### Jalur A: Tailscale (privat, tanpa domain)
 
 Tailscale membuat jaringan privat antar-perangkat. Server tidak perlu IP
 publik, tidak perlu domain, dan tidak ada port yang terbuka ke internet.
@@ -176,7 +247,107 @@ aplikasi.
 
 ---
 
-## 4. Pencadangan
+### Jalur B: domain + HTTPS otomatis (publik)
+
+Menerbitkan aplikasinya di domain sendiri, dengan sertifikat yang diminta dan
+diperpanjang sendiri oleh **Caddy**. Tidak ada certbot dan tidak ada cron.
+
+Jalur ini menambah berkas compose **ketiga**. Port 3000 ditutup, dan hanya
+Caddy yang menghadap keluar:
+
+```bash
+docker compose --env-file .env.prod   -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.proxy.yml   up -d --build
+```
+
+#### B1. Domain harus sudah menunjuk ke server LEBIH DULU
+
+Ini urutan yang tak boleh dibalik. Caddy meminta sertifikat begitu ia menyala,
+dan Let's Encrypt memverifikasinya dengan menghubungi domain tersebut. Bila
+DNS-nya belum benar, permintaan itu gagal, dan **kegagalan berulang menghitung
+kuota**: Let's Encrypt hanya mengizinkan 5 sertifikat per domain per minggu.
+Terkunci berarti menunggu tujuh hari.
+
+Di panel DNS domain Anda, buat satu A record:
+
+| Tipe | Nama | Nilai |
+|---|---|---|
+| A | `audit` (atau `@` untuk domain utama) | alamat IPv4 server |
+
+Lalu **pastikan dulu** dari mesin mana pun:
+
+```bash
+dig +short audit.contoh.com
+```
+
+Keluarannya harus persis alamat IP server. Bila kosong atau berbeda, tunggu
+sampai benar sebelum melanjutkan. Perambatan DNS biasanya beberapa menit,
+kadang sampai satu jam.
+
+#### B2. Isi dua nilai di `.env.prod`
+
+```bash
+SITE_ADDRESS=audit.contoh.com
+ACME_EMAIL=nama@contoh.com
+```
+
+`SITE_ADDRESS` ditulis **tanpa** `https://` dan tanpa garis miring. Menuliskan
+skemanya justru mematikan HTTPS otomatis: `http://audit.contoh.com` membuat
+Caddy melayani HTTP polos tanpa pernah meminta sertifikat.
+
+`ACME_EMAIL` dipakai Let's Encrypt untuk memberi tahu bila perpanjangan gagal.
+**Wajib diisi.** Bila dikosongkan, compose berhenti dengan pesan yang menyebut
+apa yang kurang; itu disengaja. Membiarkannya kosong akan membuat Caddy gagal
+mengurai berkas konfigurasinya dan menolak menyala, dengan galat yang jauh
+lebih sulit dilacak.
+
+#### B3. Buka port 80 dan 443
+
+```bash
+sudo ufw allow OpenSSH
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw --force enable
+```
+
+Keduanya wajib. Port 80 bukan sekadar untuk mengalihkan ke HTTPS: verifikasi
+ACME HTTP-01 berjalan di sana. Menutup 80 membuat sertifikat tak pernah terbit.
+
+#### B4. Pastikan sertifikatnya benar-benar terbit
+
+Menyala bukan berarti berhasil. Caddy tetap melayani HTTP meski penerbitan
+sertifikat gagal, jadi periksa catatannya:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml   -f docker-compose.proxy.yml logs caddy | grep -iE "certificate|obtain|error"
+```
+
+Yang diharapkan memuat `certificate obtained successfully`. Bila yang muncul
+justru `no such host` atau `timeout`, DNS-nya belum benar; ulangi B1.
+
+Lalu uji dari luar:
+
+```bash
+curl -sI https://audit.contoh.com | head -3
+```
+
+Harus membalas `HTTP/2 200`. Bila peramban mengeluh sertifikat tak sah,
+hampir selalu sebabnya `SITE_ADDRESS` ditulis dengan `http://`.
+
+#### B5. Yang perlu diketahui tentang jalur ini
+
+- **Volume `caddydata` wajib bertahan.** Sertifikatnya tersimpan di situ.
+  `docker compose down -v` menghapusnya dan memaksa penerbitan ulang; beberapa
+  kali saja sudah cukup untuk menabrak kuota mingguan.
+- **Aplikasinya kini terbuka untuk umum.** Yang menjaganya hanya halaman masuk.
+  Ganti sandi admin hasil `seed` segera, dan jangan menaruh data klien
+  sungguhan di instansi yang diterbitkan begini. Untuk itu, pakai Jalur A.
+- **Port 3000 sengaja ditutup.** Membiarkannya terbuka berarti aplikasinya
+  masih bisa dibuka lewat `http://IP:3000` tanpa melewati HTTPS, dan
+  sertifikatnya jadi sekadar hiasan.
+
+---
+
+## 5. Pencadangan
 
 Tanpa cadangan, satu `docker compose down -v` yang keliru menghapus seluruh
 penugasan, temuan, dan lampiran bukti.
@@ -221,7 +392,7 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml restart
 
 ---
 
-## 5. Memperbarui versi
+## 6. Memperbarui versi
 
 ```bash
 git pull
@@ -236,7 +407,7 @@ Cadangkan lebih dulu bila pembaruan memuat migrasi basis data.
 
 ---
 
-## 6. Auto-ingest di server
+## 7. Auto-ingest di server
 
 Folder terpantau (R3) berada di `./datasets/watch` relatif terhadap repo.
 Untuk menaruhnya di tempat lain, setel di `.env.prod`:
@@ -251,7 +422,7 @@ dengan unggah manual.
 
 ---
 
-## 7. Yang belum ada
+## 8. Yang belum ada
 
 - **Agent pengirim dari laptop pentester** — spec tersedia di
   `docs/superpowers/specs/2026-08-03-remote-scan-ingest-design.md`, belum

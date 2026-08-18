@@ -1,0 +1,55 @@
+# Lapisan KETIGA — dipakai bersama docker-compose.yml DAN docker-compose.prod.yml:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+#                  -f docker-compose.proxy.yml up -d --build
+#
+# Gunanya menerbitkan AuditForge ke internet lewat domain sendiri dengan HTTPS
+# otomatis. Ini ALTERNATIF dari Tailscale, bukan tambahannya — pilih salah satu.
+# Tailscale tetap pilihan yang lebih aman untuk data klien sungguhan karena tak
+# ada apa pun yang terbuka ke internet; lapisan ini untuk demo ber-domain.
+#
+# Yang berubah dibanding lapisan produksi:
+#   - port 3000 TIDAK lagi terbuka di host; hanya Caddy yang menghadap keluar
+#   - Caddy meminta dan memperbarui sertifikat Let's Encrypt sendiri
+#
+# Wajib diisi di berkas env:
+#   SITE_ADDRESS=audit.contoh.com     (domain yang A-record-nya menunjuk server ini)
+#   ACME_EMAIL=nama@contoh.com
+
+services:
+  web:
+    # Frontend kini hanya dijangkau Caddy lewat jaringan Docker. Membiarkan
+    # 3000 tetap terbuka berarti aplikasinya bisa diakses tanpa HTTPS dengan
+    # melewati proxy — sertifikatnya jadi sekadar hiasan.
+    ports: !reset []
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    # HTTPS_PORT/HTTP_PORT hanya untuk pengujian di mesin yang port 80-nya
+    # sudah dipakai. Di server biarkan bawaannya: ACME HTTP-01 dan TLS-ALPN
+    # mensyaratkan 80 dan 443 yang sesungguhnya.
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?SITE_ADDRESS wajib diisi, mis. audit.contoh.com}
+      # Wajib, dan wajib TIDAK kosong. Nilai cadangan `{$VAR:...}` di
+      # Caddyfile hanya menolong bila variabelnya tak diset sama sekali;
+      # string kosong tetap membuat arahan `email` kehilangan argumen dan
+      # Caddy menolak menyala. Lebih baik gagal di sini, dengan pesan yang
+      # menyebut apa yang kurang.
+      ACME_EMAIL: ${ACME_EMAIL:?ACME_EMAIL wajib diisi, mis. nama@contoh.com}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # WAJIB persisten. Sertifikat tersimpan di sini; kehilangannya memaksa
+      # penerbitan ulang, dan Let's Encrypt membatasi 5 sertifikat per domain
+      # per minggu. Beberapa kali `down -v` sudah cukup untuk terkunci.
+      - caddydata:/data
+      - caddyconfig:/config
+    depends_on:
+      - web
+
+volumes:
+  caddydata:
+  caddyconfig:
