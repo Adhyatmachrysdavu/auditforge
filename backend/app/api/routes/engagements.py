@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.access import can_access_engagement
 from app.api.deps import get_current_user, require_roles
 from app.core.storage import get_bytes, put_bytes, remove_object, remove_prefix
+from app.db.base import utcnow
 from app.db.session import get_db
 from app.eval.engagement_eval import evaluate_engagement
 from app.eval.timing import timing_summary
@@ -38,6 +39,7 @@ from app.reporting.filenames import ascii_fallback, content_disposition
 from app.reporting.html_writer import render_html
 from app.reporting.pdf_writer import render_pdf
 from app.reporting.report_data import ReportData, build_report_data
+from app.retest import VALID_STATUSES, is_stale, propose
 from app.review import can_transition, is_valid_status, role_allows_transition
 from app.review_diff import diff_narrative
 from app.schemas.engagement import (
@@ -56,6 +58,7 @@ from app.schemas.engagement import (
     MemberOut,
     NarrativeEditIn,
     NarrativeJobOut,
+    RemediationIn,
     ScanUploadOut,
     StatusChangeIn,
     SummaryJobOut,
@@ -191,6 +194,7 @@ def get_engagement(
         period_start=e.period_start,
         period_end=e.period_end,
         kb_shareable=e.kb_shareable,
+        current_round=e.current_round or 1,
     )
 
 
@@ -223,6 +227,19 @@ def set_engagement_details(
         "period_end": eng.period_end.isoformat() if eng.period_end else None,
         "kb_shareable": eng.kb_shareable,
     }
+
+
+@router.post("/{engagement_id}/rounds")
+def start_round(
+    engagement_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles("auditor", "admin")),
+) -> dict[str, int]:
+    """Buka putaran berikutnya. Analis tak boleh — ini keputusan audit."""
+    eng = _get_engagement(db, engagement_id, user)
+    eng.current_round = int(eng.current_round or 1) + 1
+    db.commit()
+    return {"current_round": eng.current_round}
 
 
 @router.delete("/{engagement_id}", response_model=EngagementDeleteOut)
@@ -583,7 +600,8 @@ def list_findings(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> list[FindingOut]:
-    _get_engagement(db, engagement_id, user)
+    eng = _get_engagement(db, engagement_id, user)
+    putaran = int(getattr(eng, "current_round", 1) or 1)
     rows = db.scalars(
         select(Finding).where(Finding.engagement_id == engagement_id).order_by(Finding.id)
     ).all()
@@ -608,6 +626,15 @@ def list_findings(
                 ai_generated=f.ai_generated,
                 priority=f.priority,
                 priority_score=f.priority_score,
+                rounds_seen=f.rounds_seen or [],
+                remediation_status=f.remediation_status,
+                remediation_proposal=propose(f.rounds_seen, putaran),
+                remediation_stale=is_stale(
+                    f.remediation_status,
+                    f.remediation_confirmed_round,
+                    f.rounds_seen,
+                    putaran,
+                ),
             )
         )
     return out
@@ -622,7 +649,7 @@ def _get_finding(db: Session, engagement_id: int, finding_id: int) -> Finding:
     return f
 
 
-def _finding_detail(f: Finding) -> FindingDetailOut:
+def _finding_detail(f: Finding, current_round: int) -> FindingDetailOut:
     tools = sorted({s.get("tool") for s in (f.sources or []) if s.get("tool")})
     return FindingDetailOut(
         id=f.id,
@@ -640,6 +667,15 @@ def _finding_detail(f: Finding) -> FindingDetailOut:
         ai_generated=f.ai_generated,
         priority=f.priority,
         priority_score=f.priority_score,
+        rounds_seen=f.rounds_seen or [],
+        remediation_status=f.remediation_status,
+        remediation_proposal=propose(f.rounds_seen, current_round),
+        remediation_stale=is_stale(
+            f.remediation_status,
+            f.remediation_confirmed_round,
+            f.rounds_seen,
+            current_round,
+        ),
         description=f.description,
         cvss_vector=f.cvss_vector,
         ai_model=f.ai_model,
@@ -659,9 +695,9 @@ def get_finding(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> FindingDetailOut:
-    _get_engagement(db, engagement_id, user)
+    eng = _get_engagement(db, engagement_id, user)
     f = _get_finding(db, engagement_id, finding_id)
-    return _finding_detail(f)
+    return _finding_detail(f, int(eng.current_round or 1))
 
 
 @router.post("/{engagement_id}/generate-narratives", response_model=NarrativeJobOut)
@@ -776,7 +812,7 @@ def edit_narrative(
 
     Menandai `narrative_edited` dan mencatat revisi. Tak mengubah status.
     """
-    _get_engagement(db, engagement_id, user)
+    eng = _get_engagement(db, engagement_id, user)
     f = _get_finding(db, engagement_id, finding_id)
     narrative = {
         "description": payload.description.strip(),
@@ -790,7 +826,7 @@ def edit_narrative(
     )
     db.commit()
     db.refresh(f)
-    return _finding_detail(f)
+    return _finding_detail(f, int(eng.current_round or 1))
 
 
 def _sync_knowledge_entry(
@@ -848,7 +884,7 @@ def apply_knowledge(
     penugasan lain, bukan dari model; menandainya sebagai draf AI akan merusak
     keterlacakan yang menjadi inti prinsip proposal.
     """
-    _get_engagement(db, engagement_id, user)
+    eng = _get_engagement(db, engagement_id, user)
     f = _get_finding(db, engagement_id, finding_id)
     entry = db.get(KnowledgeEntry, entry_id)
     if entry is None:
@@ -875,7 +911,7 @@ def apply_knowledge(
     entry.usage_count = (entry.usage_count or 0) + 1
     db.commit()
     db.refresh(f)
-    return _finding_detail(f)
+    return _finding_detail(f, int(eng.current_round or 1))
 
 
 @router.post(
@@ -914,7 +950,48 @@ def change_status(
     _sync_knowledge_entry(db, f, eng, user)
     db.commit()
     db.refresh(f)
-    return _finding_detail(f)
+    return _finding_detail(f, int(eng.current_round or 1))
+
+
+@router.patch(
+    "/{engagement_id}/findings/{finding_id}/remediation",
+    response_model=FindingDetailOut,
+)
+def confirm_remediation(
+    engagement_id: int,
+    finding_id: int,
+    payload: RemediationIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles("auditor", "admin")),
+) -> FindingDetailOut:
+    """Tegaskan status remediasi. Hanya auditor/admin, sejalan dengan persetujuan temuan."""
+    eng = _get_engagement(db, engagement_id, user)
+    if payload.status not in VALID_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Status remediasi tak dikenal: {payload.status}",
+        )
+    f = _get_finding(db, engagement_id, finding_id)
+    putaran = int(eng.current_round or 1)
+    f.remediation_status = payload.status
+    f.remediation_note = payload.note
+    f.remediation_confirmed_round = putaran
+    f.remediation_confirmed_by = user.id
+    f.remediation_confirmed_at = utcnow()
+    db.add(
+        FindingRevision(
+            finding_id=f.id,
+            action="remediation",
+            status=f.status,
+            narrative=None,
+            note=f"remediasi: {payload.status}"
+            + (f" — {payload.note}" if payload.note else ""),
+            author_id=user.id,
+        )
+    )
+    db.commit()
+    db.refresh(f)
+    return _finding_detail(f, putaran)
 
 
 @router.get(
