@@ -51,6 +51,11 @@ def upgrade() -> None:
     # "belum diuji" selamanya, sehingga penugasan lama tak akan pernah
     # menghasilkan usulan yang benar begitu putaran kedua dibuka.
     op.execute("UPDATE findings SET rounds_seen = '[1]' WHERE rounds_seen IS NULL")
+    # Kolom disandingkan NOT NULL hanya SESUDAH backfill: menambahkannya
+    # sebagai NOT NULL sejak awal akan gagal pada tabel yang sudah berisi.
+    # Model menyatakan Mapped[list[int]] tanpa Optional, jadi basis data harus
+    # sepadan — kalau tidak, autogenerate berikutnya mengusulkan ALTER liar.
+    op.alter_column('findings', 'rounds_seen', nullable=False)
 
 
 def downgrade() -> None:
