@@ -83,6 +83,17 @@ WATCH_HOST_DIR=./datasets/watch
 BRAND_ORG_NAME=PT Suryasoft Konsultama
 BRAND_REPORT_TITLE=Laporan Audit Keamanan
 BRAND_ACCENT=#1E5F9F
+
+# --- Penerbitan lewat domain (Jalur B di DEPLOY.md) ---
+# Hanya perlu bila memakai docker-compose.proxy.yml. Hapus tanda pagar dan isi
+# keduanya; compose menolak menyala bila salah satunya kosong.
+#
+# SITE_ADDRESS ditulis TANPA https:// dan tanpa garis miring. Menuliskan
+# skemanya justru mematikan HTTPS otomatis.
+# ACME_EMAIL wajib tidak kosong. Dikosongkan membuat Caddy gagal mengurai
+# konfigurasinya dan menolak menyala.
+#SITE_ADDRESS=audit.contoh.com
+#ACME_EMAIL=nama@contoh.com
 EOF
 
 chmod 600 "$TUJUAN" 2>/dev/null || true
@@ -96,6 +107,8 @@ echo "    $ADMIN_PASS"
 echo
 echo "Yang masih perlu kamu isi sendiri:"
 echo "  - AI_API_KEY (boleh dikosongkan; LLM juga dapat diatur dari panel Admin)"
+echo "  - SITE_ADDRESS dan ACME_EMAIL, HANYA bila menerbitkan lewat domain"
+echo "    (Jalur B di DEPLOY.md). Keduanya sudah disiapkan sebagai komentar."
 echo
 echo "Lanjutkan dengan:"
 echo "    export ENV_FILE=$TUJUAN"
