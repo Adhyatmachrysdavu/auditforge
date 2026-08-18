@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, Text
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, utcnow
@@ -25,5 +25,9 @@ class ScanUpload(Base):
     content_hash: Mapped[str | None] = mapped_column(
         String(64), index=True, nullable=True
     )
+    # --- R4 --- Putaran saat berkas ini masuk, dicap dari engagement.current_round.
+    # Dicap saat masuk, bukan dibaca belakangan: putaran bisa sudah berpindah
+    # ketika seseorang menelusuri riwayat.
+    round: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
     uploaded_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

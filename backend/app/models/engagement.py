@@ -55,3 +55,9 @@ class Engagement(Base):
     kb_shareable: Mapped[bool] = mapped_column(
         Boolean, default=True, server_default=sa_true()
     )
+    # --- R4: verifikasi remediasi (retest) ---
+    # Putaran yang sedang berjalan. 1 = audit awal; 2 dan seterusnya = retest.
+    # Dinaikkan hanya lewat tindakan sadar auditor, bukan otomatis dari waktu.
+    current_round: Mapped[int] = mapped_column(
+        Integer, default=1, server_default="1"
+    )
