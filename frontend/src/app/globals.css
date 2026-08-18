@@ -214,6 +214,11 @@ body {
   background: color-mix(in srgb, var(--danger) 16%, transparent);
   color: var(--danger);
 }
+/* R4 — status remediasi. Warnanya sengaja berbeda dari severity supaya tak
+   terbaca sebagai tingkat keparahan. */
+.badge.rem-fixed { background: #dcfce7; color: #166534; }
+.badge.rem-open { background: #fef3c7; color: #92400e; }
+.badge.rem-recurring { background: #fee2e2; color: #991b1b; }
 
 /* ---------- Topbar actions ---------- */
 .topbar-actions {
@@ -319,6 +324,10 @@ textarea:focus {
 .alert.ok {
   background: color-mix(in srgb, var(--success) 14%, transparent);
   color: var(--success);
+}
+.alert.warn {
+  background: color-mix(in srgb, var(--warning) 14%, transparent);
+  color: var(--warning);
 }
 
 /* ---------- Stat cards ---------- */

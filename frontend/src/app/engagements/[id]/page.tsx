@@ -126,6 +126,9 @@ export default function EngagementDetailPage() {
   const [openId, setOpenId] = useState<number | null>(null);
   const [detail, setDetail] = useState<api.FindingDetail | null>(null);
   const [sevFilter, setSevFilter] = useState<string>("all");
+  // --- R4: retest / putaran remediasi ---
+  const [remFilter, setRemFilter] = useState("all");
+  const [remNote, setRemNote] = useState("");
   const [sumBusy, setSumBusy] = useState(false);
   const [sumMsg, setSumMsg] = useState<string | null>(null);
   const [pollSum, setPollSum] = useState(false);
@@ -378,6 +381,7 @@ export default function EngagementDetailPage() {
       setDetail(null);
       setDiff(null);
       setSugg(null);
+      setRemNote("");
       return;
     }
     setOpenId(fid);
@@ -390,6 +394,9 @@ export default function EngagementDetailPage() {
     // membuat angka satu temuan terbaca di bawah judul temuan lain.
     setDiff(null);
     setSugg(null);
+    // Catatan alasan remediasi juga milik temuan sebelumnya — cacat yang sama
+    // (panel menyisakan isi temuan lama) sudah terjadi dua kali di berkas ini.
+    setRemNote("");
     try {
       setDetail(await api.getFinding(id, fid));
       await loadAttachments(fid);
@@ -596,8 +603,20 @@ export default function EngagementDetailPage() {
     sevCounts[f.severity] = (sevCounts[f.severity] || 0) + 1;
   });
   const shown = useMemo(() => {
-    const filtered =
+    let filtered =
       sevFilter === "all" ? findings : findings.filter((f) => f.severity === sevFilter);
+    if (remFilter !== "all") {
+      // Saring pada status BERLAKU (confirmed non-stale, else proposal), bukan
+      // status tersimpan mentah — supaya "tampilkan yang tertutup" sejalan
+      // dengan apa yang kolom Remediasi tampilkan di mata pengguna.
+      filtered = filtered.filter((f) => {
+        const berlaku =
+          f.remediation_status && !f.remediation_stale
+            ? f.remediation_status
+            : f.remediation_proposal;
+        return berlaku === remFilter;
+      });
+    }
     // Urut: prioritas naik (P1 dulu) → keparahan → skor prioritas turun.
     return [...filtered].sort((a, b) => {
       const pa = a.priority ?? 9;
@@ -608,7 +627,7 @@ export default function EngagementDetailPage() {
       if (sa !== sb) return sa - sb;
       return (b.priority_score ?? 0) - (a.priority_score ?? 0);
     });
-  }, [findings, sevFilter]);
+  }, [findings, sevFilter, remFilter]);
 
   const show = (c: ColKey) => cols.has(c);
   const toggleCol = (c: ColKey) =>
@@ -618,8 +637,8 @@ export default function EngagementDetailPage() {
       else next.add(c);
       return next;
     });
-  // 2 kolom tetap (keparahan, judul) + kolom opsional yang aktif → colSpan baris naratif.
-  const colSpan = 2 + OPTIONAL_COLS.filter((c) => cols.has(c)).length;
+  // 3 kolom tetap (keparahan, judul, Remediasi/R4) + kolom opsional yang aktif → colSpan baris naratif.
+  const colSpan = 3 + OPTIONAL_COLS.filter((c) => cols.has(c)).length;
 
   const summary = eng?.exec_summary;
 
@@ -635,6 +654,38 @@ export default function EngagementDetailPage() {
 
   return (
     <AppShell title={`${t("nav.engagements")} #${id}`}>
+      {/* R4: lencana putaran berjalan + tombol buka putaran baru (auditor/admin) */}
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          alignItems: "center",
+          flexWrap: "wrap",
+          marginBottom: 12,
+        }}
+      >
+        {eng && (
+          <span className="badge wait">
+            {t("retest.round")} {eng.current_round ?? 1}
+          </span>
+        )}
+        {canApprove && (
+          <button
+            className="btn secondary"
+            onClick={() => {
+              if (!window.confirm(t("retest.newRoundAsk"))) return;
+              api
+                .startRound(id)
+                .then(() => refresh())
+                .catch((err) =>
+                  setError(err instanceof ApiError ? err.message : String(err)),
+                );
+            }}
+          >
+            {t("retest.newRound")}
+          </button>
+        )}
+      </div>
       <div className="tabbar">
         {TABS.map((tb) => (
           <button
@@ -832,6 +883,20 @@ export default function EngagementDetailPage() {
             ))}
           </div>
         )}
+        {/* R4: penapis status remediasi — hanya berarti sejak putaran ke-2 */}
+        {(eng?.current_round ?? 1) > 1 && (
+          <div className="chip-row" style={{ marginTop: 8 }}>
+            {["all", "fixed", "open", "recurring"].map((s) => (
+              <button
+                key={s}
+                className={`chip ${remFilter === s ? "active" : ""}`}
+                onClick={() => setRemFilter(s)}
+              >
+                {s === "all" ? t("filter.all") : t(`retest.st.${s}` as MessageKey)}
+              </button>
+            ))}
+          </div>
+        )}
         {findings.length === 0 ? (
           <p className="muted">{t("find.empty")}</p>
         ) : viewMode === "kanban" ? (
@@ -902,6 +967,7 @@ export default function EngagementDetailPage() {
                   {show("count") && <th>{t("find.count")}</th>}
                   {show("narrative") && <th>{t("narr.col")}</th>}
                   {show("status") && <th>{t("find.status")}</th>}
+                  <th>{t("retest.column")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -983,6 +1049,20 @@ export default function EngagementDetailPage() {
                           </button>
                         </td>
                       )}
+                      <td>
+                        {f.remediation_status && !f.remediation_stale ? (
+                          <span className={`badge rem-${f.remediation_status}`}>
+                            {t(`retest.st.${f.remediation_status}` as MessageKey)}
+                          </span>
+                        ) : (eng?.current_round ?? 1) > 1 ? (
+                          <span className="badge wait" title={t("retest.proposalTag")}>
+                            {t(`retest.st.${f.remediation_proposal}` as MessageKey)} ·{" "}
+                            {t("retest.proposalTag")}
+                          </span>
+                        ) : (
+                          <span className="muted">—</span>
+                        )}
+                      </td>
                     </tr>
                     {openId === f.id && (
                       <tr>
@@ -1452,6 +1532,56 @@ export default function EngagementDetailPage() {
                                     ))
                                   )}
                                 </div>
+                              )}
+
+                              {/* R4: garis waktu putaran + penegasan status remediasi */}
+                              {(eng?.current_round ?? 1) > 1 && detail && (
+                                <section className="card">
+                                  <h4 style={{ marginTop: 0 }}>{t("retest.column")}</h4>
+                                  <p className="muted">
+                                    {detail.rounds_seen?.length
+                                      ? `${t("retest.seenIn")} ${detail.rounds_seen.join(", ")}` +
+                                        (Math.min(...detail.rounds_seen) === eng?.current_round
+                                          ? ` · ${t("retest.newHere")}`
+                                          : "")
+                                      : `${t("retest.notSeenIn")} ${eng?.current_round}`}
+                                  </p>
+                                  {detail.remediation_stale && (
+                                    <div className="alert warn">{t("retest.stale")}</div>
+                                  )}
+                                  <div className="form-row">
+                                    {["fixed", "open", "recurring"].map((s) => (
+                                      <button
+                                        key={s}
+                                        className="btn secondary"
+                                        onClick={() =>
+                                          api
+                                            .setRemediation(id, detail.id, s, remNote || undefined)
+                                            .then(() => {
+                                              setRemNote("");
+                                              return refresh();
+                                            })
+                                            .catch((err) =>
+                                              setError(
+                                                err instanceof ApiError
+                                                  ? err.message
+                                                  : String(err),
+                                              ),
+                                            )
+                                        }
+                                      >
+                                        {t("retest.confirm")}: {t(`retest.st.${s}` as MessageKey)}
+                                      </button>
+                                    ))}
+                                  </div>
+                                  <label className="field">
+                                    <span>{t("retest.note")}</span>
+                                    <input
+                                      value={remNote}
+                                      onChange={(e) => setRemNote(e.target.value)}
+                                    />
+                                  </label>
+                                </section>
                               )}
                             </div>
                           ) : (
