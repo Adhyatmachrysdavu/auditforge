@@ -23,8 +23,12 @@ _LABELS = {
         "evidence": "Bukti", "edited": "disunting auditor",
         "empty": "Tidak ada temuan disetujui untuk dilaporkan.",
         "confidential": "RAHASIA — hanya untuk penerima yang berwenang.",
-        "remediation": "Remediasi", "rem_fixed": "Tertutup",
-        "rem_open": "Masih terbuka", "rem_recurring": "Kambuh",
+        "rem_fixed": "Tertutup", "rem_open": "Masih terbuka",
+        "rem_recurring": "Kambuh", "rem_not_tested": "Belum diuji",
+        "remediation_summary": (
+            "{fixed} dari {total} temuan telah tertutup dan diverifikasi "
+            "(Putaran {round})."
+        ),
     },
     "en": {
         "client": "Client", "prepared_by": "Prepared by", "generated": "Generated",
@@ -37,8 +41,12 @@ _LABELS = {
         "evidence": "Evidence", "edited": "edited by auditor",
         "empty": "No approved findings to report.",
         "confidential": "CONFIDENTIAL — for authorized recipients only.",
-        "remediation": "Remediation", "rem_fixed": "Closed",
-        "rem_open": "Still open", "rem_recurring": "Recurring",
+        "rem_fixed": "Closed", "rem_open": "Still open",
+        "rem_recurring": "Recurring", "rem_not_tested": "Not tested",
+        "remediation_summary": (
+            "{fixed} of {total} findings have been closed and verified "
+            "(Round {round})."
+        ),
     },
 }
 _POSTURE = {
@@ -98,8 +106,9 @@ _TEMPLATE = """<!doctype html>
   </div>
 
   {% if data.current_round > 1 %}
-    <p>{{ data.remediation_counts.get('fixed', 0) }} dari {{ data.total }}
-       temuan telah tertutup dan diverifikasi (Putaran {{ data.current_round }}).</p>
+    <p>{{ L.remediation_summary.format(
+      fixed=data.remediation_counts.get('fixed', 0),
+      total=data.total, round=data.current_round) }}</p>
   {% endif %}
 
   {% if data.summary_overview or data.summary_key_risks or data.summary_recommendations %}
