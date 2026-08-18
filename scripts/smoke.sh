@@ -179,6 +179,17 @@ else
         cek 200 GET "/engagements/$EID/findings/$FID/diff"
         cek 200 GET "/engagements/$EID/findings/$FID/attachments"
         cek 200 GET "/knowledge/suggest?finding_id=$FID"
+        # R4: payload temuan wajib memuat usulan remediasi. Field ini dihitung,
+        # jadi ketiadaannya berarti serialisasinya putus — dan itu tak akan
+        # membuat satu pun endpoint membalas selain 200.
+        if curl -s "$BASE/engagements/$EID/findings" -H "Authorization: Bearer $TOKEN" \
+            | grep -q '"remediation_proposal"'; then
+            LULUS=$((LULUS + 1))
+            printf '  \033[32mok\033[0m   payload temuan memuat remediation_proposal\n'
+        else
+            GAGAL=$((GAGAL + 1))
+            printf '  \033[31mGAGAL\033[0m payload temuan tanpa remediation_proposal\n'
+        fi
     fi
 fi
 
@@ -202,6 +213,9 @@ cek 404 GET "/engagements/99999"
 # kegagalan palsu yang menyamarkan hasil sesungguhnya.
 if [ -n "$EID" ]; then
     cek 400 DELETE "/engagements/$EID" '{"confirm_name":"salah"}'
+    if [ -n "$FID" ]; then
+        cek 400 PATCH "/engagements/$EID/findings/$FID/remediation" '{"status":"ngawur"}'
+    fi
 else
     printf '  [33mlewat[0m  penolakan hapus (belum ada penugasan)
 '
