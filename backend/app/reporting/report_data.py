@@ -9,6 +9,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
+from app.retest import effective_status, summarize
+
 _SEV_ORDER = ["critical", "high", "medium", "low", "info"]
 _SEV_RANK = {s: i for i, s in enumerate(_SEV_ORDER)}
 
@@ -31,6 +33,9 @@ class ReportFinding:
     recommendation: str
     edited: bool
     evidence: list[str] = field(default_factory=list)  # data URI gambar (D16)
+    # R4: status remediasi yang BERLAKU. None = belum ditegaskan, kedaluwarsa,
+    # atau penugasan ini belum pernah diretest.
+    remediation: str | None = None
 
 
 @dataclass
@@ -53,6 +58,9 @@ class ReportData:
     period: str | None = None
     scope: str | None = None
     findings: list[ReportFinding] = field(default_factory=list)
+    # --- R4: verifikasi remediasi (retest) berbasis putaran ---
+    current_round: int = 1
+    remediation_counts: dict[str, int] = field(default_factory=dict)
 
     @property
     def total(self) -> int:
@@ -94,6 +102,7 @@ def build_report_data(
     include: str = "approved",
     exec_summary: dict[str, object] | None = None,
     summary_finding_count: int | None = None,
+    current_round: int = 1,
 ) -> ReportData:
     """Susun `ReportData`. `include`: 'approved' (default) atau 'all'.
 
@@ -135,6 +144,16 @@ def build_report_data(
                 impact=n["impact"],
                 recommendation=n["recommendation"],
                 edited=bool(getattr(f, "narrative_edited", False)),
+                remediation=(
+                    effective_status(
+                        getattr(f, "remediation_status", None),
+                        getattr(f, "remediation_confirmed_round", None),
+                        getattr(f, "rounds_seen", None),
+                        current_round,
+                    )
+                    if current_round > 1
+                    else None
+                ),
             )
         )
 
@@ -155,6 +174,8 @@ def build_report_data(
     pe = getattr(engagement, "period_end", None)
     period = f"{ps} — {pe}" if ps and pe else (str(ps) if ps else None)
 
+    remediation_counts = summarize(selected, current_round) if current_round > 1 else {}
+
     return ReportData(
         org_name=org_name,
         report_title=report_title,
@@ -172,4 +193,6 @@ def build_report_data(
         summary_stale_note=stale_note,
         period=period,
         scope=getattr(engagement, "scope", None),
+        current_round=current_round,
+        remediation_counts=remediation_counts,
     )

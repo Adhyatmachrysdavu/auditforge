@@ -1212,6 +1212,7 @@ def _assemble_report(
         include="all" if include == "all" else "approved",
         exec_summary=eng.exec_summary,
         summary_finding_count=eng.exec_summary_finding_count,
+        current_round=int(getattr(eng, "current_round", 1) or 1),
     )
     if with_evidence:
         for rf in data.findings:

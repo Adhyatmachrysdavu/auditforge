@@ -73,6 +73,15 @@ _POSTURE = {
 }
 
 
+# R4 — label status remediasi untuk laporan DOCX.
+LABEL_REMEDIASI = {
+    "fixed": "Tertutup",
+    "open": "Masih terbuka",
+    "recurring": "Kambuh",
+    "not_tested": "Belum diuji",
+}
+
+
 def _accent(color_hex: str) -> RGBColor:
     try:
         return RGBColor.from_string(color_hex.lstrip("#"))
@@ -145,6 +154,8 @@ def render_docx(data: ReportData, *, accent: str = "#1E5F9F", lang: str = "id") 
                 f"{t['status']}: {f.status}" + (f" ({t['edited']})" if f.edited else ""),
             ]
             doc.add_paragraph(" · ".join(m for m in meta if m))
+            if data.current_round > 1 and f.remediation:
+                doc.add_paragraph(f"Remediasi: {LABEL_REMEDIASI[f.remediation]}")
             _labelled(doc, t["description"], f.description or "—")
             _labelled(doc, t["impact"], f.impact or "—")
             _labelled(doc, t["recommendation"], f.recommendation or "—")
