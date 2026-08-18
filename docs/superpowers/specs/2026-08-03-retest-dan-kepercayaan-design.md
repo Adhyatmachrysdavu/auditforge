@@ -1,7 +1,26 @@
 # Desain — Verifikasi Remediasi (Retest) dan Skor Kepercayaan Lintas-Perkakas
 
 **Tanggal:** 3 Agustus 2026
-**Status:** Disetujui untuk perencanaan
+**Status:** Modul A **DIGANTIKAN** oleh `2026-08-18-retest-putaran-design.md`.
+Modul B (skor kepercayaan) tetap berlaku dan belum diambil.
+
+> **Modul A jangan diimplementasikan dari dokumen ini.** Retest kini berupa
+> **putaran di dalam penugasan yang sama**, bukan `Engagement` terpisah, sehingga
+> `parent_engagement_id` dan tabel `retest_results` di bawah **tidak jadi dibuat**.
+>
+> Keberatan utama dokumen ini terhadap model putaran — bahwa dedup akan melumerkan
+> kedua putaran menjadi satu baris sehingga "kemampuan membandingkan hancur seketika"
+> — benar untuk skema saat itu, tetapi tidak lagi berlaku begitu tiap penampakan
+> dicap nomor putaran lewat `findings.rounds_seen`. Penggabungan justru yang
+> diinginkan: satu kerentanan tetap satu baris, dan ketidakhadirannya di putaran
+> terbaru tetap terbaca.
+>
+> Keberatan kedua — penugasan yang laporannya sudah diserahkan tak boleh berubah
+> isinya — tetap sah, dan ditutup di desain baru dengan membatasi kolom remediasi
+> agar hanya muncul bila `current_round > 1`.
+>
+> Bagian Modul A di bawah dipertahankan apa adanya sebagai riwayat pertimbangan.
+
 **Ruang lingkup:** AuditForge — dua kemampuan **di luar proposal**, disetujui secara sadar
 dengan syarat "tidak terlalu jauh dan lebih baik dari proposal"
 
