@@ -41,6 +41,10 @@ _L = {
         "rem_open": "Masih terbuka",
         "rem_recurring": "Kambuh",
         "rem_not_tested": "Belum diuji",
+        "remediation_summary": (
+            "{fixed} dari {total} temuan telah tertutup dan diverifikasi "
+            "(Putaran {round})."
+        ),
     },
     "en": {
         "prepared_by": "Prepared by",
@@ -68,6 +72,10 @@ _L = {
         "rem_open": "Still open",
         "rem_recurring": "Recurring",
         "rem_not_tested": "Not tested",
+        "remediation_summary": (
+            "{fixed} of {total} findings have been closed and verified "
+            "(Round {round})."
+        ),
     },
 }
 
@@ -117,6 +125,18 @@ def render_docx(data: ReportData, *, accent: str = "#1E5F9F", lang: str = "id") 
     if data.posture:
         posture_label = _POSTURE[lg].get(data.posture, data.posture)
         doc.add_paragraph(f"{t['posture']}: {posture_label}")
+
+    # Kalimat ringkasan remediasi (spec bagian 8). Sejajar dengan html_writer:
+    # sesudah kepala surat, sebelum ringkasan eksekutif. Hanya dicetak sejak
+    # putaran kedua, sebab di putaran pertama belum ada yang diverifikasi ulang.
+    if data.current_round > 1:
+        doc.add_paragraph(
+            t["remediation_summary"].format(
+                fixed=data.remediation_counts.get("fixed", 0),
+                total=data.total,
+                round=data.current_round,
+            )
+        )
 
     # --- Ringkasan eksekutif ---
     if data.summary_overview or data.summary_key_risks or data.summary_recommendations:

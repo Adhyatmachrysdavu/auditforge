@@ -1563,7 +1563,12 @@ export default function EngagementDetailPage() {
                                             onClick={() =>
                                               api
                                                 .setRemediation(id, detail.id, s, remNote || undefined)
-                                                .then(() => {
+                                                .then((updated) => {
+                                                  // Panel detail HARUS memakai balasan server.
+                                                  // Tanpa ini kotak peringatan kedaluwarsa tetap
+                                                  // menempel sesudah penegasan, sebab `refresh()`
+                                                  // hanya menyegarkan daftar, bukan `detail`.
+                                                  setDetail(updated);
                                                   setRemNote("");
                                                   return refresh();
                                                 })

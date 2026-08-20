@@ -211,6 +211,7 @@ export const messages = {
     "rev.reject": "Ditolak",
     "rev.false_positive": "Ditandai false positive",
     "rev.reopen": "Dibuka kembali",
+    "rev.remediation": "Status remediasi ditegaskan",
 
     "tab.files": "Berkas",
     "tab.findings": "Temuan",
@@ -552,6 +553,7 @@ export const messages = {
     "rev.reject": "Rejected",
     "rev.false_positive": "Marked false positive",
     "rev.reopen": "Reopened",
+    "rev.remediation": "Remediation status confirmed",
 
     "tab.files": "Files",
     "tab.findings": "Findings",

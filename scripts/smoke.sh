@@ -257,8 +257,21 @@ if [ -n "$EID" ] && [ -n "$FID" ] && [ -n "$ANALIS_EMAIL" ]; then
         printf '  [31mGAGAL[0m tak dapat masuk sebagai analis %s
 ' "$ANALIS_EMAIL"
     else
-        cek 403 PATCH "/engagements/$EID/findings/$FID/remediation" '{"status":"fixed"}'
-        cek 403 POST "/engagements/$EID/rounds"
+        # Pastikan akunnya BENAR-BENAR analis sebelum menembak. Kedua permintaan
+        # di bawah adalah mutasi sungguhan: bila akun yang diberikan ternyata
+        # berhak, ia tidak dibalas 403 melainkan BERHASIL, menaikkan putaran
+        # penugasan dan menimpa status remediasi sebuah temuan. Skrip ini juga
+        # ditembakkan ke server produksi, jadi salah kredensial harus berhenti
+        # di sini, bukan berakhir sebagai kerusakan data.
+        PERAN=$(curl -s "$BASE/auth/me" -H "Authorization: Bearer $TOKEN"             | python -c "import sys,json;print(json.load(sys.stdin).get('role',''))" 2>/dev/null)
+        if [ "$PERAN" != "analyst" ]; then
+            GAGAL=$((GAGAL + 1))
+            printf '  [31mGAGAL[0m %s berperan "%s", bukan analis — cek dibatalkan agar tak memutasi data
+'                 "$ANALIS_EMAIL" "$PERAN"
+        else
+            cek 403 PATCH "/engagements/$EID/findings/$FID/remediation" '{"status":"fixed"}'
+            cek 403 POST "/engagements/$EID/rounds"
+        fi
     fi
     TOKEN="$TOKEN_ADMIN"
 else
