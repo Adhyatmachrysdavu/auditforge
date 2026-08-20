@@ -179,16 +179,19 @@ Setelah klien menyatakan temuan sudah diperbaiki, verifikasinya dilakukan
 sebagai **putaran baru** di penugasan yang sama, bukan penugasan baru.
 
 1. Buka: penugasan yang bersangkutan. Di kepala halaman tertulis **Putaran 1**.
-2. Tekan **Mulai Putaran Baru**. Sejak saat itu setiap berkas yang masuk
-   dihitung sebagai Putaran 2, termasuk yang datang lewat folder terpantau.
+2. Tekan **Mulai Putaran Baru**, lalu setujui kotak konfirmasinya. Sejak saat
+   itu setiap berkas yang masuk dihitung sebagai Putaran 2, termasuk yang
+   datang lewat folder terpantau.
 3. Masukkan hasil pemindaian ulang, lewat tab **Berkas** atau folder terpantau
    seperti biasa.
 4. Buka: tab **Temuan**. Kolom **Remediasi** kini terisi usulan sistem.
 
-Usulan itu **bukan keputusan**. Lencana yang berbunyi "tak terlihat di Putaran 2"
-hanya menyatakan bahwa pemindaian ulang tidak menemukannya lagi — bisa saja
+Usulan itu **bukan keputusan**. Lencana bertuliskan **Tertutup · usulan** hanya
+menyatakan bahwa pemindaian ulang tidak menemukan temuan itu lagi. Bisa saja
 cakupannya berbeda, targetnya sedang mati, atau perkakasnya kebetulan tak
-mendeteksi. Karena itu ia tampil redup dan berlabel "usulan".
+mendeteksi. Karena itu kata "usulan" selalu menempel sampai Anda menegaskannya.
+Tiga usulan lain yang mungkin muncul: **Masih terbuka**, **Kambuh**, dan
+**Belum diuji**.
 
 5. Buka satu temuan, periksa garis waktunya, lalu tekan **Tegaskan** dengan
    status yang menurut Anda benar. Isi alasannya bila Anda menimpa usulan.
