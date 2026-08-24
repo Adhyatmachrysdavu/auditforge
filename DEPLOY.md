@@ -49,11 +49,53 @@ Lewati bagian ini bila servernya sudah ada.
 
 Jangan ambil yang 2 GB. Bukan aplikasinya yang berat, melainkan `next build`
 saat pembangunan image frontend: pada 2 GB ia terbunuh di tengah jalan, dan
-pesannya hanya `exit code 137` tanpa keterangan apa pun. Dengan kredit
-DigitalOcean $200 dari GitHub Student Pack, ukuran ini bertahan sekitar
-delapan bulan.
+pesannya hanya `exit code 137` tanpa keterangan apa pun.
 
-Tambahkan kunci SSH saat membuat droplet; jangan memakai sandi.
+Tambahkan kunci SSH saat membuat mesinnya; jangan memakai sandi.
+
+#### Azure for Students: TERBUKTI TIDAK BISA (24 Agustus 2026)
+
+Bagian di bawah ini **usang**, disimpan hanya sebagai catatan agar tidak dicoba
+ulang. Kredit $100-nya nyata dan berlaku sampai Agustus 2027, tetapi langganan
+itu **tidak dapat membuat VM sama sekali**: seluruh keluarga mesin berkuota
+`0 of 0` di setiap region, termasuk Indonesia Central, dan permintaan kenaikan
+kuota ditolak dengan "your subscription isn't eligible for a quota increase".
+Mendaftarkan `Microsoft.Compute`, `Microsoft.Network`, dan `Microsoft.Storage`
+tidak mengubah apa pun. Satu-satunya jalan yang ditawarkan Azure adalah upgrade
+ke Pay-As-You-Go, yang mencabut perlindungan langganan student dan mulai
+menagih kartu begitu kredit habis; jangan lakukan itu.
+
+Yang berlaku sekarang: server dari PT Suryasoft Konsultama, atau VPS lokal
+Indonesia yang menerima transfer bank atau QRIS. Keduanya x86, jadi seluruh
+sisa dokumen ini berlaku apa adanya.
+
+#### Catatan usang: kalau memakai Azure for Students
+
+DigitalOcean **sudah tidak ada lagi** di GitHub Student Pack per Agustus 2026.
+Penggantinya Azure for Students: kredit $100, tanpa kartu kredit, berlaku satu
+tahun. Buat VM lewat portal dengan nilai berikut.
+
+| Kolom | Isi |
+|---|---|
+| Region | **Southeast Asia** (Singapura, paling dekat dari Indonesia) |
+| Image | **Ubuntu Server 24.04 LTS** |
+| Size | **Standard_B2s** (2 vCPU, 4 GiB) |
+| Authentication | **SSH public key** |
+| Inbound ports | **SSH (22)** saja dulu; 80 dan 443 dibuka di langkah B3 |
+| OS disk | Standard SSD, 30 GB sudah cukup |
+
+Jangan tergoda memakai **B1s** yang masuk daftar Free Services. Ia hanya 1 GiB
+RAM, dan `next build` pasti terbunuh di situ.
+
+**Kredit $100 kira-kira tiga bulan bila VM dibiarkan menyala terus.** Azure
+menagih compute hanya saat VM hidup, jadi pola yang jauh lebih hemat adalah
+menyalakannya menjelang demo lalu menekan **Stop (deallocate)** sesudahnya.
+Perhatikan bahwa *deallocate* berbeda dari sekadar `shutdown` dari dalam VM:
+hanya deallocate yang menghentikan tagihan compute. Disk dan alamat IP tetap
+ditagih kecil saat VM mati, sekitar $5 sampai $6 per bulan.
+
+Ambil **alamat IP publik statis**. Dengan IP dinamis, alamatnya berubah setiap
+kali VM dideallocate, dan catatan DNS di langkah B1 langsung basi.
 
 ### Pasang Docker dan swap
 
