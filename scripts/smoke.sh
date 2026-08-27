@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # Pemeriksaan asap lapisan route — jalankan pada stack yang sedang menyala.
 #
-#   ./scripts/smoke.sh [base-url] [email] [sandi]
+#   ./scripts/smoke.sh [base-url] [email] [sandi] [email-analis] [sandi-analis]
 #   ./scripts/smoke.sh http://localhost:8000 admin@auditforge.local admin12345
+#
+# Dua argumen terakhir opsional. Bila diisi, penolakan RBAC retest ikut diuji
+# sebagai analis sungguhan; bila tidak, bagian itu menandai dirinya "lewat".
 #
 # KENAPA INI ADA. Seluruh 222 tes pytest bersifat murni: tanpa DB, Redis, MinIO,
 # maupun LLM, dan tak satu pun menyentuh lapisan route. Itu memang disengaja dan
@@ -28,6 +31,12 @@ set -uo pipefail
 BASE="${1:-http://localhost:8000}"
 EMAIL="${2:-admin@auditforge.local}"
 SANDI="${3:-admin12345}"
+# Opsional. Bila diisi, penolakan RBAC retest diuji ujung ke ujung sebagai
+# analis sungguhan. Tanpa ini bagian itu menandai dirinya "lewat" secara
+# terlihat — server sungguhan tak punya akun analis bawaan, dan skrip ini
+# tidak boleh membuat akun demi sebuah pemeriksaan.
+ANALIS_EMAIL="${4:-}"
+ANALIS_SANDI="${5:-}"
 
 AKAR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
@@ -179,6 +188,27 @@ else
         cek 200 GET "/engagements/$EID/findings/$FID/diff"
         cek 200 GET "/engagements/$EID/findings/$FID/attachments"
         cek 200 GET "/knowledge/suggest?finding_id=$FID"
+        # R4: payload temuan wajib memuat usulan remediasi yang SAH. Field ini
+        # dihitung, jadi serialisasi yang putus tak akan membuat satu pun
+        # endpoint membalas selain 200. Nilainya ikut diperiksa, bukan hanya
+        # keberadaan kuncinya: `remediation_proposal` punya nilai bawaan
+        # "not_tested", sehingga memeriksa kuncinya saja nyaris tak menambah
+        # daya deteksi di atas cek 200 tepat di atas ini.
+        if curl -s "$BASE/engagements/$EID/findings" -H "Authorization: Bearer $TOKEN" \
+            | python -c '
+import sys, json
+sah = {"not_tested", "open", "fixed", "recurring"}
+d = json.load(sys.stdin)
+assert d, "daftar temuan kosong"
+buruk = [f["id"] for f in d if f.get("remediation_proposal") not in sah]
+assert not buruk, buruk
+' 2>/dev/null; then
+            LULUS=$((LULUS + 1))
+            printf '  \033[32mok\033[0m   remediation_proposal sah di seluruh temuan\n'
+        else
+            GAGAL=$((GAGAL + 1))
+            printf '  \033[31mGAGAL\033[0m remediation_proposal hilang atau tak sah\n'
+        fi
     fi
 fi
 
@@ -202,8 +232,50 @@ cek 404 GET "/engagements/99999"
 # kegagalan palsu yang menyamarkan hasil sesungguhnya.
 if [ -n "$EID" ]; then
     cek 400 DELETE "/engagements/$EID" '{"confirm_name":"salah"}'
+    if [ -n "$FID" ]; then
+        cek 400 PATCH "/engagements/$EID/findings/$FID/remediation" '{"status":"ngawur"}'
+    else
+        printf '  [33mlewat[0m  validasi status remediasi (belum ada temuan)
+'
+    fi
 else
     printf '  [33mlewat[0m  penolakan hapus (belum ada penugasan)
+'
+fi
+
+
+# Spec R4 bagian 10: analis dilarang menegaskan remediasi. Penolakan itu dijaga
+# permanen oleh `tests/test_retest_rbac.py`, yang memanggil dependency perannya
+# langsung dari pohon route sehingga selalu ikut berjalan di pytest. Di sini ia
+# diuji sekali lagi menembus HTTP sungguhan, sebab tes murni tak dapat
+# membuktikan bahwa token analis benar-benar dibalas 403 oleh server yang hidup.
+if [ -n "$EID" ] && [ -n "$FID" ] && [ -n "$ANALIS_EMAIL" ]; then
+    TOKEN_ADMIN="$TOKEN"
+    TOKEN=$(curl -s -X POST "$BASE/auth/login"         -d "username=$ANALIS_EMAIL&password=$ANALIS_SANDI"         | python -c "import sys,json;print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null)
+    if [ -z "$TOKEN" ]; then
+        GAGAL=$((GAGAL + 1))
+        printf '  [31mGAGAL[0m tak dapat masuk sebagai analis %s
+' "$ANALIS_EMAIL"
+    else
+        # Pastikan akunnya BENAR-BENAR analis sebelum menembak. Kedua permintaan
+        # di bawah adalah mutasi sungguhan: bila akun yang diberikan ternyata
+        # berhak, ia tidak dibalas 403 melainkan BERHASIL, menaikkan putaran
+        # penugasan dan menimpa status remediasi sebuah temuan. Skrip ini juga
+        # ditembakkan ke server produksi, jadi salah kredensial harus berhenti
+        # di sini, bukan berakhir sebagai kerusakan data.
+        PERAN=$(curl -s "$BASE/auth/me" -H "Authorization: Bearer $TOKEN"             | python -c "import sys,json;print(json.load(sys.stdin).get('role',''))" 2>/dev/null)
+        if [ "$PERAN" != "analyst" ]; then
+            GAGAL=$((GAGAL + 1))
+            printf '  [31mGAGAL[0m %s berperan "%s", bukan analis — cek dibatalkan agar tak memutasi data
+'                 "$ANALIS_EMAIL" "$PERAN"
+        else
+            cek 403 PATCH "/engagements/$EID/findings/$FID/remediation" '{"status":"fixed"}'
+            cek 403 POST "/engagements/$EID/rounds"
+        fi
+    fi
+    TOKEN="$TOKEN_ADMIN"
+else
+    printf '  [33mlewat[0m  penolakan analis (kredensial analis tak diberikan)
 '
 fi
 

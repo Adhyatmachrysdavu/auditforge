@@ -35,6 +35,8 @@ class EngagementDetailOut(EngagementOut):
     period_start: date | None = None
     period_end: date | None = None
     kb_shareable: bool = True
+    # --- R4: verifikasi remediasi ---
+    current_round: int = 1
 
 
 class MemberOut(BaseModel):
@@ -113,6 +115,13 @@ class FindingOut(BaseModel):
     ai_generated: bool = False
     priority: int | None = None
     priority_score: float | None = None
+    # --- R4: verifikasi remediasi ---
+    rounds_seen: list[int] = []
+    remediation_status: str | None = None
+    # Dihitung, hanya-baca. Tak pernah disimpan agar tak mungkin basi.
+    remediation_proposal: str = "not_tested"
+    # True bila penegasan lama sudah dibantah putaran berikutnya.
+    remediation_stale: bool = False
 
 
 class FindingDetailOut(FindingOut):
@@ -172,3 +181,10 @@ class SummaryJobOut(BaseModel):
 
 class TriageResultOut(BaseModel):
     triaged: int
+
+
+class RemediationIn(BaseModel):
+    """Penegasan status remediasi oleh auditor."""
+
+    status: str
+    note: str | None = Field(default=None, max_length=1000)

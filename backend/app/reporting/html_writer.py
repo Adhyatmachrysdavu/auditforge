@@ -23,6 +23,12 @@ _LABELS = {
         "evidence": "Bukti", "edited": "disunting auditor",
         "empty": "Tidak ada temuan disetujui untuk dilaporkan.",
         "confidential": "RAHASIA — hanya untuk penerima yang berwenang.",
+        "rem_fixed": "Tertutup", "rem_open": "Masih terbuka",
+        "rem_recurring": "Kambuh", "rem_not_tested": "Belum diuji",
+        "remediation_summary": (
+            "{fixed} dari {total} temuan telah tertutup dan diverifikasi "
+            "(Putaran {round})."
+        ),
     },
     "en": {
         "client": "Client", "prepared_by": "Prepared by", "generated": "Generated",
@@ -35,6 +41,12 @@ _LABELS = {
         "evidence": "Evidence", "edited": "edited by auditor",
         "empty": "No approved findings to report.",
         "confidential": "CONFIDENTIAL — for authorized recipients only.",
+        "rem_fixed": "Closed", "rem_open": "Still open",
+        "rem_recurring": "Recurring", "rem_not_tested": "Not tested",
+        "remediation_summary": (
+            "{fixed} of {total} findings have been closed and verified "
+            "(Round {round})."
+        ),
     },
 }
 _POSTURE = {
@@ -69,6 +81,10 @@ _TEMPLATE = """<!doctype html>
   .evi img { max-width: 460px; max-height: 320px; border: 1px solid #cbd5e1;
     border-radius: 6px; margin: 4px 6px 0 0; }
   .muted { color: #94a3b8; }
+  .rem { font-weight: bold; }
+  .rem-fixed { color: #16a34a; }
+  .rem-open { color: #d97706; }
+  .rem-recurring { color: #dc2626; }
   /* Peringatan ringkasan basi: harus terlihat, tapi tidak menyaingi isi laporan. */
   .stale-note { background: #fef3c7; border-left: 3px solid #d97706;
                 padding: 6px 10px; color: #92400e; font-size: 0.92em; }
@@ -89,6 +105,12 @@ _TEMPLATE = """<!doctype html>
     <div class="chart-box"><h3>{{ L.risk_matrix }}</h3>{{ matrix_svg | safe }}</div>
   </div>
 
+  {% if data.current_round > 1 %}
+    <p>{{ L.remediation_summary.format(
+      fixed=data.remediation_counts.get('fixed', 0),
+      total=data.total, round=data.current_round) }}</p>
+  {% endif %}
+
   {% if data.summary_overview or data.summary_key_risks or data.summary_recommendations %}
   <h2>{{ L.exec_summary }}</h2>
   {% if data.summary_stale_note %}<p class="stale-note">⚠ {{ data.summary_stale_note }}</p>{% endif %}
@@ -105,6 +127,9 @@ _TEMPLATE = """<!doctype html>
       <span class="badge" style="background:{{ sev_color(f.severity) }}">{{ f.severity }}</span></h3>
     <div class="fmeta">
       {% if f.priority %}P{{ f.priority }} · {% endif %}
+      {% if data.current_round > 1 and f.remediation %}
+        · <span class="rem rem-{{ f.remediation }}">{{ L['rem_' + f.remediation] }}</span>
+      {% endif %}
       {% if f.cvss_score is not none %}CVSS {{ f.cvss_score }} · {% endif %}
       {% if f.cwe %}{{ f.cwe }} · {% endif %}
       {% if f.owasp %}{{ f.owasp }} · {% endif %}

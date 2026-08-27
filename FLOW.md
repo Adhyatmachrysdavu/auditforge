@@ -173,6 +173,35 @@ versi (`finding_revisions`), termasuk membedakan asal draf AI vs suntingan audit
 
 ---
 
+## C2. Memverifikasi perbaikan klien (retest)
+
+Setelah klien menyatakan temuan sudah diperbaiki, verifikasinya dilakukan
+sebagai **putaran baru** di penugasan yang sama, bukan penugasan baru.
+
+1. Buka: penugasan yang bersangkutan. Di kepala halaman tertulis **Putaran 1**.
+2. Tekan **Mulai Putaran Baru**, lalu setujui kotak konfirmasinya. Sejak saat
+   itu setiap berkas yang masuk dihitung sebagai Putaran 2, termasuk yang
+   datang lewat folder terpantau.
+3. Masukkan hasil pemindaian ulang, lewat tab **Berkas** atau folder terpantau
+   seperti biasa.
+4. Buka: tab **Temuan**. Kolom **Remediasi** kini terisi usulan sistem.
+
+Usulan itu **bukan keputusan**. Lencana bertuliskan **Tertutup · usulan** hanya
+menyatakan bahwa pemindaian ulang tidak menemukan temuan itu lagi. Bisa saja
+cakupannya berbeda, targetnya sedang mati, atau perkakasnya kebetulan tak
+mendeteksi. Karena itu kata "usulan" selalu menempel sampai Anda menegaskannya.
+Tiga usulan lain yang mungkin muncul: **Masih terbuka**, **Kambuh**, dan
+**Belum diuji**.
+
+5. Buka satu temuan, periksa garis waktunya, lalu tekan **Tegaskan** dengan
+   status yang menurut Anda benar. Isi alasannya bila Anda menimpa usulan.
+
+Hanya status yang sudah ditegaskan yang tercetak di laporan. Bila sebuah temuan
+yang pernah Anda tegaskan tertutup muncul lagi di putaran berikutnya, penegasan
+lama ditandai perlu ditegaskan ulang dan sementara itu tidak ikut tercetak.
+
+---
+
 ## D. Alur auto-ingest folder terpantau (R3)
 
 Alternatif tanpa unggah manual lewat UI:

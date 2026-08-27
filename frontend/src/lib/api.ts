@@ -85,6 +85,8 @@ export interface EngagementDetail extends Engagement {
   period_start: string | null;
   period_end: string | null;
   kb_shareable: boolean;
+  // --- R4: retest / putaran remediasi ---
+  current_round: number;
 }
 export interface ScanUpload {
   id: number;
@@ -112,6 +114,11 @@ export interface Finding {
   ai_generated: boolean;
   priority: number | null;
   priority_score: number | null;
+  // --- R4: retest / putaran remediasi ---
+  rounds_seen: number[];
+  remediation_status: string | null;
+  remediation_proposal: string;
+  remediation_stale: boolean;
 }
 export interface Narrative {
   description?: string;
@@ -444,6 +451,24 @@ export const saveEngagementDetails = (id: number, d: EngagementDetails) =>
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(d),
   });
+
+// ---------- R4: retest / putaran remediasi ----------
+export function startRound(id: number): Promise<{ current_round: number }> {
+  return req(`/engagements/${id}/rounds`, { method: "POST" });
+}
+
+export function setRemediation(
+  id: number,
+  findingId: number,
+  status: string,
+  note?: string,
+): Promise<FindingDetail> {
+  return req<FindingDetail>(`/engagements/${id}/findings/${findingId}/remediation`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status, note: note || null }),
+  });
+}
 // Belum ada fungsi apa pun untuk /users di klien ini — dropdown anggota
 // membutuhkannya, jadi ditambahkan di sini.
 export const listUsers = () => req<User[]>("/users");

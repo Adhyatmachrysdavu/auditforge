@@ -65,8 +65,21 @@ def _enrich_finding(uf: UnifiedFinding) -> None:
     uf.raw["_cves"] = e.cves
 
 
+def tandai_putaran(rounds_seen: list[int] | None, current_round: int) -> list[int]:
+    """Sisipkan putaran berjalan, kembalikan daftar BARU yang urut dan unik.
+
+    Mengembalikan daftar baru, bukan memutasi yang lama, karena SQLAlchemy
+    hanya mendeteksi perubahan kolom JSON bila kolomnya ditugaskan ulang.
+    """
+    return sorted({int(r) for r in (rounds_seen or [])} | {int(current_round)})
+
+
 def _ingest_findings(
-    db: Session, engagement_id: int, upload_id: int, findings: list[UnifiedFinding]
+    db: Session,
+    engagement_id: int,
+    upload_id: int,
+    findings: list[UnifiedFinding],
+    current_round: int,
 ) -> dict:
     """Simpan temuan dengan deduplikasi terhadap temuan yang sudah ada di engagement.
 
@@ -88,7 +101,11 @@ def _ingest_findings(
     for uf in findings:
         _enrich_finding(uf)  # D8: pengayaan sebelum fingerprint & dedup
         fp = compute_fingerprint(uf)
-        source: SourceRef = {"tool": uf.tool.value, "upload_id": upload_id}
+        source: SourceRef = {
+            "tool": uf.tool.value,
+            "upload_id": upload_id,
+            "round": current_round,
+        }
         cves = uf.raw.get("_cves") or []
         row = existing.get(fp)
         if row is None:
@@ -107,11 +124,16 @@ def _ingest_findings(
                 occurrences=1,
                 sources=[source],
                 ai_generated=False,
+                rounds_seen=[current_round],
             )
             db.add(row)
             existing[fp] = row
             created += 1
         else:
+            # R4: catat putaran ini sebelum apa pun yang lain. Penggabungan
+            # lintas putaran memang diinginkan — yang tak boleh hilang adalah
+            # jejak putaran mana saja temuan ini terlihat.
+            row.rounds_seen = tandai_putaran(row.rounds_seen, current_round)
             # Gabung: severity & cvss tertinggi menang; catat asal; naikkan occurrences.
             if severity_rank(uf.severity) > severity_rank(row.severity):
                 row.severity = uf.severity.value
@@ -276,7 +298,12 @@ def parse_upload(upload_id: int) -> dict:
                 return {"error": "parser tak dikenali", "upload_id": upload_id}
 
             findings = parser.parse(content)
-            stats = _ingest_findings(db, upload.engagement_id, upload.id, findings)
+            eng = db.get(Engagement, upload.engagement_id)
+            putaran = int(getattr(eng, "current_round", 1) or 1)
+            upload.round = putaran
+            stats = _ingest_findings(
+                db, upload.engagement_id, upload.id, findings, putaran
+            )
             upload.tool = parser.tool.value  # tulis-balik perkakas terdeteksi (auto/unknown)
             upload.status = UploadStatus.parsed.value
             upload.error = None

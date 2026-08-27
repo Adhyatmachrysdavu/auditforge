@@ -53,6 +53,24 @@ class Finding(Base):
     reviewed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # --- R4: verifikasi remediasi (retest) ---
+    # Putaran tempat temuan ini pernah terlihat, mis. [1, 3]. Inilah yang
+    # membuat ketidakhadiran terbaca tanpa menduplikasi temuan.
+    rounds_seen: Mapped[list[int]] = mapped_column(JSON, default=list)
+    # Keputusan auditor. None = belum ditegaskan; usulan sistem TIDAK disimpan.
+    remediation_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    remediation_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Putaran saat penegasan diberikan. Dipakai menandai penegasan yang sudah
+    # dibantah putaran berikutnya.
+    remediation_confirmed_round: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )
+    remediation_confirmed_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    remediation_confirmed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow

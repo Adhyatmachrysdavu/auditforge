@@ -214,6 +214,26 @@ body {
   background: color-mix(in srgb, var(--danger) 16%, transparent);
   color: var(--danger);
 }
+/* R4 — status remediasi. Memakai token semantik yang sama dengan badge lain
+   (bukan hex tetap) supaya ikut menyesuaikan diri di mode gelap; warnanya
+   kebetulan berimpit dengan token severity, tapi maknanya tetap keadaan
+   remediasi, bukan tingkat keparahan. */
+.badge.rem-fixed {
+  background: color-mix(in srgb, var(--success) 16%, transparent);
+  color: var(--success);
+}
+.badge.rem-open {
+  background: color-mix(in srgb, var(--warning) 16%, transparent);
+  color: var(--warning);
+}
+.badge.rem-recurring {
+  background: color-mix(in srgb, var(--danger) 16%, transparent);
+  color: var(--danger);
+}
+.badge.rem-not_tested {
+  background: color-mix(in srgb, var(--ink-muted) 16%, transparent);
+  color: var(--ink-muted);
+}
 
 /* ---------- Topbar actions ---------- */
 .topbar-actions {
@@ -319,6 +339,10 @@ textarea:focus {
 .alert.ok {
   background: color-mix(in srgb, var(--success) 14%, transparent);
   color: var(--success);
+}
+.alert.warn {
+  background: color-mix(in srgb, var(--warning) 14%, transparent);
+  color: var(--warning);
 }
 
 /* ---------- Stat cards ---------- */
