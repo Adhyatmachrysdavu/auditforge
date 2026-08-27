@@ -1,0 +1,38 @@
+# Lapisan untuk server RAM kecil (di bawah 1 GB) yang tak sanggup membangun
+# image sendiri — `next build` mati dengan exit 137 tanpa keterangan pada RAM
+# sekecil itu. Image dibangun di mesin lain (lihat scripts/build-push.sh) lalu
+# didorong ke GitHub Container Registry; server ini tinggal menarik dan
+# menjalankannya. Dipakai BERSAMA docker-compose.yml + docker-compose.prod.yml:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+#     -f docker-compose.ghcr.yml -f docker-compose.proxy.yml \
+#     --env-file .env.prod pull
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+#     -f docker-compose.ghcr.yml -f docker-compose.proxy.yml \
+#     --env-file .env.prod up -d
+#
+# Repo publik → paket GHCR yang dibuat publik → server menarik tanpa perlu
+# `docker login` maupun kredensial apa pun.
+
+services:
+  api:
+    image: ghcr.io/adhyatmachrysdavu/auditforge-api:latest
+    pull_policy: always
+    # 1 worker, bukan 4 dari docker-compose.prod.yml: server ini 1 vCPU, lebih
+    # banyak worker daripada core hanya menambah pemakaian RAM tanpa menambah
+    # paralelisme nyata.
+    command: >
+      uvicorn app.main:app --host 0.0.0.0 --port 8000
+      --workers 1 --proxy-headers --forwarded-allow-ips=*
+
+  worker:
+    image: ghcr.io/adhyatmachrysdavu/auditforge-api:latest
+    pull_policy: always
+
+  beat:
+    image: ghcr.io/adhyatmachrysdavu/auditforge-api:latest
+    pull_policy: always
+
+  web:
+    image: ghcr.io/adhyatmachrysdavu/auditforge-web:latest
+    pull_policy: always
