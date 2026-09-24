@@ -2,14 +2,26 @@
 # image sendiri — `next build` mati dengan exit 137 tanpa keterangan pada RAM
 # sekecil itu. Image dibangun di mesin lain (lihat scripts/build-push.sh) lalu
 # didorong ke GitHub Container Registry; server ini tinggal menarik dan
-# menjalankannya. Dipakai BERSAMA docker-compose.yml + docker-compose.prod.yml:
+# menjalankannya. Dipakai BERSAMA docker-compose.yml + docker-compose.prod.yml.
 #
-#   docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+# `ENV_FILE=.env.prod` di depan WAJIB, bukan hiasan: `--env-file` hanya memberi
+# nilai untuk interpolasi `${...}`, sedangkan yang menentukan isi environment
+# kontainer adalah `env_file: ["${ENV_FILE:-.env}"]` di docker-compose.yml.
+# Tanpa prefix itu ia jatuh ke `.env` yang tidak ada di server, dan `up` gagal
+# dengan "env file /opt/auditforge/.env not found" (terjadi 24 September 2026).
+#
+#   ENV_FILE=.env.prod docker compose --env-file .env.prod \
+#     -f docker-compose.yml -f docker-compose.prod.yml \
 #     -f docker-compose.ghcr.yml -f docker-compose.proxy.yml \
-#     --env-file .env.prod pull
-#   docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+#     pull api worker beat web
+#   ENV_FILE=.env.prod docker compose --env-file .env.prod \
+#     -f docker-compose.yml -f docker-compose.prod.yml \
 #     -f docker-compose.ghcr.yml -f docker-compose.proxy.yml \
-#     --env-file .env.prod up -d
+#     up -d --force-recreate api worker beat web
+#
+# Sebut layanannya satu per satu (api worker beat web) — jangan tanpa argumen:
+# kontainer `caddy` memegang :80/:443 bersama proyek lain di server yang sama
+# (Home Assistant menumpang di Caddyfile), jadi jangan ikut di-recreate.
 #
 # Repo publik → paket GHCR yang dibuat publik → server menarik tanpa perlu
 # `docker login` maupun kredensial apa pun.
