@@ -133,6 +133,11 @@ export const messages = {
     "find.priority": "Prioritas",
     "find.status": "Status",
     "find.empty": "Belum ada temuan.",
+    "find.addManual": "Catat Temuan Manual",
+    "find.manualTitle": "Judul Temuan",
+    "find.manualTitlePh": "mis. Kontrol akses tak ada pada modul penggajian",
+    "find.manualDescPh": "Jelaskan temuan (opsional)",
+    "find.addManualSubmit": "Simpan Temuan",
 
     "narr.generate": "Buat Naratif AI",
     "narr.col": "Naratif",
@@ -146,6 +151,7 @@ export const messages = {
     "narr.impact": "Dampak",
     "narr.rec": "Rekomendasi",
     "narr.none": "Belum ada draf naratif.",
+    "narr.injectionWarning": "Konten temuan ini mengandung frasa yang menyerupai upaya prompt injection. Frasa itu sudah dinetralkan sebelum dikirim ke AI — tetap tinjau draf ini ekstra hati-hati.",
     "filter.all": "Semua",
 
     "triage.run": "Hitung Ulang Triase",
@@ -475,6 +481,11 @@ export const messages = {
     "find.priority": "Priority",
     "find.status": "Status",
     "find.empty": "No findings yet.",
+    "find.addManual": "Add Manual Finding",
+    "find.manualTitle": "Finding Title",
+    "find.manualTitlePh": "e.g. Missing access control on the payroll module",
+    "find.manualDescPh": "Describe the finding (optional)",
+    "find.addManualSubmit": "Save Finding",
 
     "narr.generate": "Generate AI Narrative",
     "narr.col": "Narrative",
@@ -488,6 +499,7 @@ export const messages = {
     "narr.impact": "Impact",
     "narr.rec": "Recommendation",
     "narr.none": "No narrative draft yet.",
+    "narr.injectionWarning": "This finding's content contains phrasing resembling a prompt-injection attempt. It was neutralized before being sent to the AI — review this draft with extra care regardless.",
     "filter.all": "All",
 
     "triage.run": "Recompute Triage",

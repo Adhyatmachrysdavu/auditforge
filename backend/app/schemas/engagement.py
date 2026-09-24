@@ -144,6 +144,22 @@ class NarrativeEditIn(BaseModel):
     note: str | None = Field(default=None, max_length=1000)
 
 
+class FindingCreateIn(BaseModel):
+    """Temuan yang dicatat langsung oleh auditor/analis, di luar alur parser.
+
+    Bukan hanya kerentanan sistem: bisa juga celah proses bisnis, kontrol akses
+    yang tak ada, dan hal lain yang tak pernah muncul dari hasil pemindaian.
+    Karena itu semua kolom pengayaan (CWE/OWASP/CVSS) opsional.
+    """
+
+    title: str = Field(min_length=1, max_length=300)
+    description: str | None = Field(default=None, max_length=8000)
+    severity: str = Field(default="info")
+    cwe: str | None = Field(default=None, max_length=32)
+    owasp: str | None = Field(default=None, max_length=64)
+    cvss_score: float | None = Field(default=None, ge=0.0, le=10.0)
+
+
 class StatusChangeIn(BaseModel):
     status: str
     note: str | None = Field(default=None, max_length=1000)

@@ -11,7 +11,8 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.storage import get_bytes, put_bytes
 from app.db.session import SessionLocal
-from app.enrichment import enrich
+from app.detectors import run_detectors
+from app.enrichment import enrich, owasp_for_cwe
 from app.ingest.dedup import find_parsed_duplicate
 from app.ingest.rules import sha256_of
 from app.ingest.watcher import iter_inbox_files, move_result
@@ -64,6 +65,20 @@ def _enrich_finding(uf: UnifiedFinding) -> None:
     uf.raw["_cvss_vector"] = e.cvss_vector
     uf.raw["_cves"] = e.cves
 
+    # D17 (masukan pembimbing lapangan): pustaka deteksi deterministik berbasis
+    # plugin (app/detectors/) — penanda tekstual kelas kerentanan umum (SQLi,
+    # LFI, CSRF) pada judul/deskripsi/referensi yang sudah ada, tanpa memindai
+    # ulang apa pun. Hanya backfill CWE/OWASP bila perkakas & basis CVE di atas
+    # belum mengisinya, dan simpan seluruh kecocokan untuk keterlacakan asal.
+    matches = run_detectors(uf.title, uf.description, " ".join(uf.references))
+    if matches:
+        uf.raw["_detector_matches"] = [
+            {"id": m.detector_id, "label": m.label, "cwe": m.cwe} for m in matches
+        ]
+        if not uf.cwe:
+            uf.cwe = matches[0].cwe
+            uf.raw["_owasp"] = uf.raw["_owasp"] or owasp_for_cwe(matches[0].cwe)
+
 
 def tandai_putaran(rounds_seen: list[int] | None, current_round: int) -> list[int]:
     """Sisipkan putaran berjalan, kembalikan daftar BARU yang urut dan unik.
@@ -106,6 +121,8 @@ def _ingest_findings(
             "upload_id": upload_id,
             "round": current_round,
         }
+        if uf.raw.get("_detector_matches"):
+            source["detectors"] = [m["id"] for m in uf.raw["_detector_matches"]]
         cves = uf.raw.get("_cves") or []
         row = existing.get(fp)
         if row is None:

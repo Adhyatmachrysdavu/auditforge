@@ -12,6 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from app.ai import llm
+from app.ai.masking import mask_text
 from app.ai.parsing import extract_json_fields
 from app.ai.prompts import SUMMARY_PROMPT_VERSION, summary_prompts
 from app.ai.providers import get_provider
@@ -40,13 +41,15 @@ class ExecutiveSummary:
     posture: str
     model: str
     prompt_version: str = SUMMARY_PROMPT_VERSION
+    injection_flagged: bool = False
 
-    def as_dict(self) -> dict[str, str]:
+    def as_dict(self) -> dict[str, str | bool]:
         return {
             "overview": self.overview,
             "key_risks": self.key_risks,
             "recommendations": self.recommendations,
             "posture": self.posture,
+            "injection_flagged": self.injection_flagged,
         }
 
 
@@ -128,7 +131,12 @@ def generate_executive_summary(
     lang: str = "id",
     max_tokens: int = 1200,
 ) -> ExecutiveSummary:
-    """Panggil LLM (dengan masking otomatis) → ringkasan eksekutif terstruktur."""
+    """Panggil LLM (dengan masking otomatis) → ringkasan eksekutif terstruktur.
+
+    `payload` merangkai judul temuan yang berasal dari parsing berkas scan
+    unggahan — tak tepercaya, sama seperti pada `narrative.generate_narrative`.
+    """
+    injection_flagged = mask_text(payload).injection_detected
     system, user = summary_prompts(payload, lang=lang)
     reply = llm.draft(user, system=system, max_tokens=max_tokens)
     parts = extract_json_fields(
@@ -141,4 +149,5 @@ def generate_executive_summary(
         recommendations=parts["recommendations"],
         posture=posture_code,
         model=provider.model,
+        injection_flagged=injection_flagged,
     )

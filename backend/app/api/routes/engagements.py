@@ -27,7 +27,7 @@ from app.knowledge.entries import (
 from app.knowledge.matching import normalize_title
 from app.models.engagement import Engagement
 from app.models.engagement_member import EngagementMember
-from app.models.enums import ScanTool, UploadStatus
+from app.models.enums import FindingStatus, ScanTool, Severity, UploadStatus
 from app.models.finding import Finding, FindingAttachment, FindingRevision
 from app.models.knowledge_entry import KnowledgeEntry
 from app.models.scan_upload import ScanUpload
@@ -51,6 +51,7 @@ from app.schemas.engagement import (
     EngagementDetailOut,
     EngagementDetailsIn,
     EngagementOut,
+    FindingCreateIn,
     FindingDetailOut,
     FindingOut,
     FindingRevisionOut,
@@ -638,6 +639,56 @@ def list_findings(
             )
         )
     return out
+
+
+@router.post(
+    "/{engagement_id}/findings",
+    response_model=FindingDetailOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_finding(
+    engagement_id: int,
+    payload: FindingCreateIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles("analyst", "auditor", "admin")),
+) -> FindingDetailOut:
+    """Catat temuan manual, di luar alur parser (D17).
+
+    Menutup celah: auditor tak bisa mencatat temuan sendiri sebelum ini — mis.
+    celah proses bisnis atau kontrol akses yang tak ada, yang tak mungkin
+    muncul dari hasil pemindaian otomatis. `fingerprint` sengaja dibiarkan
+    `None`: temuan manual tak ikut mekanisme dedup lintas-alat (lihat
+    `_ingest_findings` di `workers/tasks.py`, yang hanya menyorot baris dengan
+    fingerprint terisi), jadi unggahan scan berikutnya tak pernah menimpanya.
+    """
+    eng = _get_engagement(db, engagement_id, user)
+    severity = payload.severity.strip().lower()
+    if severity not in {s.value for s in Severity}:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Keparahan tak dikenal"
+        )
+    f = Finding(
+        engagement_id=engagement_id,
+        source_upload_id=None,
+        title=payload.title.strip(),
+        description=(payload.description or "").strip() or None,
+        severity=severity,
+        status=FindingStatus.draft.value,
+        cwe=payload.cwe,
+        owasp=payload.owasp,
+        cvss_score=payload.cvss_score,
+        sources=[{"tool": "manual", "created_by": user.id}],
+        fingerprint=None,
+    )
+    db.add(f)
+    db.flush()
+    t = triage(f.severity, cvss_score=f.cvss_score, occurrences=1, cve=[])
+    f.priority = t.priority
+    f.priority_score = t.score
+    _add_revision(db, f, action="create", note="Dicatat manual oleh auditor/analis", author_id=user.id)
+    db.commit()
+    db.refresh(f)
+    return _finding_detail(f, int(eng.current_round or 1))
 
 
 def _get_finding(db: Session, engagement_id: int, finding_id: int) -> Finding:

@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.ai import llm
+from app.ai.masking import mask_text
 from app.ai.parsing import extract_json_fields
 from app.ai.prompts import NARRATIVE_PROMPT_VERSION, narrative_prompts
 from app.ai.providers import get_provider
@@ -22,12 +23,14 @@ class FindingNarrative:
     recommendation: str
     model: str
     prompt_version: str = NARRATIVE_PROMPT_VERSION
+    injection_flagged: bool = False
 
-    def as_dict(self) -> dict[str, str]:
+    def as_dict(self) -> dict[str, str | bool]:
         return {
             "description": self.description,
             "impact": self.impact,
             "recommendation": self.recommendation,
+            "injection_flagged": self.injection_flagged,
         }
 
 
@@ -66,7 +69,14 @@ def _parse(reply: str) -> dict[str, str]:
 def generate_narrative(
     payload: str, *, lang: str = "id", max_tokens: int = 1000
 ) -> FindingNarrative:
-    """Panggil LLM (dengan masking otomatis) → naratif terstruktur."""
+    """Panggil LLM (dengan masking otomatis) → naratif terstruktur.
+
+    `payload` berasal dari data temuan hasil parsing berkas scan yang diunggah
+    pengguna — tak tepercaya. Dicek dulu untuk indikasi prompt injection
+    (lihat `masking.py`); hasilnya diteruskan sebagai `injection_flagged` agar
+    auditor tahu draf ini perlu ditinjau ekstra hati-hati.
+    """
+    injection_flagged = mask_text(payload).injection_detected
     system, user = narrative_prompts(payload, lang=lang)
     reply = llm.draft(user, system=system, max_tokens=max_tokens)
     parts = _parse(reply)
@@ -76,4 +86,5 @@ def generate_narrative(
         impact=parts["impact"],
         recommendation=parts["recommendation"],
         model=provider.model,
+        injection_flagged=injection_flagged,
     )

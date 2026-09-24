@@ -84,7 +84,8 @@ class FindingRevision(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     finding_id: Mapped[int] = mapped_column(ForeignKey("findings.id"), index=True)
-    # 'ai_draft' | 'edit' | 'submit' | 'approve' | 'reject' | 'false_positive' | 'reopen'
+    # 'create' | 'ai_draft' | 'edit' | 'submit' | 'approve' | 'reject' | 'false_positive'
+    # | 'reopen' | 'remediation'
     action: Mapped[str] = mapped_column(String(20))
     status: Mapped[str] = mapped_column(String(20))  # status setelah aksi
     narrative: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # cuplikan naratif

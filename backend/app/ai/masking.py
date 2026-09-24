@@ -15,6 +15,15 @@ Prinsip on-premise AuditForge: bila LLM berada di cloud (mis. OpenRouter), data
 rahasia klien tak boleh keluar apa adanya. `mask_text()` mengembalikan teks
 tersamar **beserta peta** placeholder→asli yang HANYA disimpan di sisi server
 (untuk audit / potensi unmask hasil AI), tak pernah ikut terkirim ke LLM.
+
+Lapisan yang sama juga menangkal **prompt injection** (OWASP LLM01): konten
+temuan berasal dari berkas hasil scan yang diunggah pengguna, jadi bukan hanya
+sistem yang diaudit yang bisa berisi muatan berbahaya — teks yang dikirim ke
+LLM pun jadi permukaan serangan. Frasa yang menyerupai upaya membajak instruksi
+(mis. "ignore previous instructions", token kendali gaya `<|im_start|>`/`[INST]`)
+diganti token tetap `[SUSPECTED-INJECTION]` **sebelum** masking rahasia
+lainnya, dan token itu sengaja TIDAK dimasukkan ke peta unmask — jika balasan
+LLM mengulanginya, token itu tak pernah dikembalikan ke frasa aslinya.
 """
 from __future__ import annotations
 
@@ -55,6 +64,48 @@ _EMAIL_RE = re.compile(r"\b[\w.+-]+@[\w-]+\.[\w.-]+\b")
 _IPV4_RE = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
 _HOST_RE = re.compile(r"\b(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}\b", re.IGNORECASE)
 
+# Pola upaya prompt injection / jailbreak pada konten temuan (berasal dari
+# berkas scan pihak luar, jadi tak tepercaya). Tiap pola diberi label kategori
+# agar pemanggil bisa menampilkan peringatan tanpa perlu tahu regex-nya.
+# Sengaja permisif (boleh false-positive) — konsekuensi salah tangkap hanya
+# frasa netral diganti token, bukan kebocoran/pembajakan instruksi ke LLM.
+_INJECTION_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    (
+        "IGNORE-INSTRUCTIONS",
+        re.compile(
+            r"(?i)\b(?:ignore|disregard|forget)\b[^.\n]{0,40}\b(?:previous|above|prior|"
+            r"earlier|all)\b[^.\n]{0,20}\b(?:instructions?|prompt|rules|guidelines)\b"
+        ),
+    ),
+    (
+        "OVERRIDE-SYSTEM",
+        re.compile(
+            r"(?i)\b(?:override|bypass)\b[^.\n]{0,30}\b(?:your|the|system)\b[^.\n]{0,20}"
+            r"\b(?:instructions?|guidelines|rules|prompt)\b"
+        ),
+    ),
+    (
+        "ROLE-HIJACK",
+        re.compile(
+            r"(?i)\byou are now\b|\bpretend (?:you are|to be)\b|\bact as (?:if you (?:are|were)|a\s*[:\-])"
+        ),
+    ),
+    (
+        "REVEAL-SYSTEM-PROMPT",
+        re.compile(
+            r"(?i)\b(?:reveal|print|show|repeat)\b[^.\n]{0,20}\b(?:your|the)\b[^.\n]{0,15}"
+            r"\b(?:system prompt|initial instructions|hidden instructions)\b"
+        ),
+    ),
+    (
+        "CONTROL-TOKEN",
+        re.compile(
+            r"<\|im_start\|>|<\|im_end\|>|\[/?INST\]|<<SYS>>|<</SYS>>|</?system>",
+            re.IGNORECASE,
+        ),
+    ),
+)
+
 
 @dataclass
 class MaskResult:
@@ -62,10 +113,15 @@ class MaskResult:
 
     text: str
     mapping: dict[str, str] = field(default_factory=dict)
+    injection_flags: list[str] = field(default_factory=list)
 
     @property
     def count(self) -> int:
         return len(self.mapping)
+
+    @property
+    def injection_detected(self) -> bool:
+        return bool(self.injection_flags)
 
 
 def _is_internal_ip(token: str) -> bool:
@@ -97,6 +153,7 @@ def mask_text(
     mapping: dict[str, str] = {}
     counters: dict[str, int] = {}
     seen: dict[tuple[str, str], str] = {}
+    injection_flags: list[str] = []
 
     def placeholder(category: str, original: str) -> str:
         key = (category, original)
@@ -109,6 +166,13 @@ def mask_text(
         return token
 
     out = text
+    # Deteksi & netralkan upaya prompt injection dulu, sebelum masking rahasia.
+    # Token pengganti TETAP (bukan lewat placeholder()) → tak masuk peta unmask.
+    for label, pattern in _INJECTION_PATTERNS:
+        if pattern.search(out):
+            if label not in injection_flags:
+                injection_flags.append(label)
+            out = pattern.sub("[SUSPECTED-INJECTION]", out)
     # Urutan penting: item paling spesifik dulu.
     out = _PRIVKEY_RE.sub(lambda m: placeholder("PRIVKEY", m.group(0)), out)
     out = _BASIC_AUTH_RE.sub(lambda m: "://" + placeholder("CRED", m.group(1)) + "@", out)
@@ -132,7 +196,7 @@ def mask_text(
         else m.group(0),
         out,
     )
-    return MaskResult(text=out, mapping=mapping)
+    return MaskResult(text=out, mapping=mapping, injection_flags=injection_flags)
 
 
 def unmask_text(text: str, mapping: dict[str, str]) -> str:

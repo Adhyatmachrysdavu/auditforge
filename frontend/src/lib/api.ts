@@ -72,6 +72,8 @@ export interface ExecSummary {
   key_risks?: string;
   recommendations?: string;
   posture?: string;
+  /** Konten sumber (temuan) mengandung indikasi prompt injection — tinjau ekstra hati-hati. */
+  injection_flagged?: boolean;
 }
 export interface EngagementDetail extends Engagement {
   exec_summary_generated: boolean;
@@ -124,6 +126,8 @@ export interface Narrative {
   description?: string;
   impact?: string;
   recommendation?: string;
+  /** Konten sumber (temuan) mengandung indikasi prompt injection — tinjau ekstra hati-hati. */
+  injection_flagged?: boolean;
 }
 export interface FindingDetail extends Finding {
   description: string | null;
@@ -199,6 +203,22 @@ export const listUploads = (id: number) => req<ScanUpload[]>(`/engagements/${id}
 export const listFindings = (id: number) => req<Finding[]>(`/engagements/${id}/findings`);
 export const getFinding = (id: number, fid: number) =>
   req<FindingDetail>(`/engagements/${id}/findings/${fid}`);
+export const createFinding = (
+  id: number,
+  body: {
+    title: string;
+    description?: string;
+    severity: string;
+    cwe?: string;
+    owasp?: string;
+    cvss_score?: number;
+  }
+) =>
+  req<FindingDetail>(`/engagements/${id}/findings`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
 export const editNarrative = (
   id: number,
   fid: number,

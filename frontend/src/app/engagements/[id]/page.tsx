@@ -11,6 +11,7 @@ import {
   Lightbulb,
   ListChecks,
   PencilSimple,
+  ShieldWarning,
   Sliders,
   Sparkle,
   Trash,
@@ -159,6 +160,11 @@ export default function EngagementDetailPage() {
   const [baseBusy, setBaseBusy] = useState(false);
   const [baseMsg, setBaseMsg] = useState<string | null>(null);
   const [baseErr, setBaseErr] = useState<string | null>(null);
+  const [showAddFinding, setShowAddFinding] = useState(false);
+  const [addBusy, setAddBusy] = useState(false);
+  const [addTitle, setAddTitle] = useState("");
+  const [addDesc, setAddDesc] = useState("");
+  const [addSev, setAddSev] = useState("medium");
   // Deteksi macet polling naratif (mis. batas kuota LLM): tak ada progres → berhenti.
   const stallRef = useRef({ last: -1, stall: 0 });
 
@@ -355,6 +361,28 @@ export default function EngagementDetailPage() {
       setError(err instanceof ApiError ? err.message : String(err));
     } finally {
       setTriBusy(false);
+    }
+  }
+
+  async function submitAddFinding() {
+    if (!addTitle.trim()) return;
+    setAddBusy(true);
+    setError(null);
+    try {
+      await api.createFinding(id, {
+        title: addTitle.trim(),
+        description: addDesc.trim() || undefined,
+        severity: addSev,
+      });
+      setAddTitle("");
+      setAddDesc("");
+      setAddSev("medium");
+      setShowAddFinding(false);
+      await refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : String(err));
+    } finally {
+      setAddBusy(false);
     }
   }
 
@@ -815,50 +843,99 @@ export default function EngagementDetailPage() {
           <h3 style={{ margin: 0 }}>
             {t("find.title")} <span className="muted">({findings.length})</span>
           </h3>
-          {findings.length > 0 && (
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-              <div className="chip-row">
-                <button
-                  className={`chip ${viewMode === "list" ? "active" : ""}`}
-                  onClick={() => setViewMode("list")}
-                >
-                  {t("view.list")}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <button
+              className="btn secondary"
+              onClick={() => setShowAddFinding((v) => !v)}
+            >
+              <PencilSimple size={16} /> {t("find.addManual")}
+            </button>
+            {findings.length > 0 && (
+              <>
+                <div className="chip-row">
+                  <button
+                    className={`chip ${viewMode === "list" ? "active" : ""}`}
+                    onClick={() => setViewMode("list")}
+                  >
+                    {t("view.list")}
+                  </button>
+                  <button
+                    className={`chip ${viewMode === "kanban" ? "active" : ""}`}
+                    onClick={() => setViewMode("kanban")}
+                  >
+                    {t("view.kanban")}
+                  </button>
+                </div>
+                <button className="btn secondary" onClick={runTriage} disabled={triBusy}>
+                  <ListChecks size={16} /> {triBusy ? t("common.loading") : t("triage.run")}
                 </button>
-                <button
-                  className={`chip ${viewMode === "kanban" ? "active" : ""}`}
-                  onClick={() => setViewMode("kanban")}
-                >
-                  {t("view.kanban")}
+                {viewMode === "list" && (
+                  <details className="col-menu">
+                    <summary className="btn secondary">
+                      <Sliders size={16} /> {t("cols.menu")}
+                    </summary>
+                    <div className="col-menu-pop">
+                      {OPTIONAL_COLS.map((c) => (
+                        <label key={c} className="col-menu-item">
+                          <input
+                            type="checkbox"
+                            checked={cols.has(c)}
+                            onChange={() => toggleCol(c)}
+                          />
+                          <span>{colLabel[c]}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </details>
+                )}
+                <button className="btn" onClick={genNarratives} disabled={genBusy}>
+                  <Sparkle size={16} /> {genBusy ? t("common.loading") : t("narr.generate")}
                 </button>
-              </div>
-              <button className="btn secondary" onClick={runTriage} disabled={triBusy}>
-                <ListChecks size={16} /> {triBusy ? t("common.loading") : t("triage.run")}
-              </button>
-              {viewMode === "list" && (
-                <details className="col-menu">
-                  <summary className="btn secondary">
-                    <Sliders size={16} /> {t("cols.menu")}
-                  </summary>
-                  <div className="col-menu-pop">
-                    {OPTIONAL_COLS.map((c) => (
-                      <label key={c} className="col-menu-item">
-                        <input
-                          type="checkbox"
-                          checked={cols.has(c)}
-                          onChange={() => toggleCol(c)}
-                        />
-                        <span>{colLabel[c]}</span>
-                      </label>
-                    ))}
-                  </div>
-                </details>
-              )}
-              <button className="btn" onClick={genNarratives} disabled={genBusy}>
-                <Sparkle size={16} /> {genBusy ? t("common.loading") : t("narr.generate")}
-              </button>
-            </div>
-          )}
+              </>
+            )}
+          </div>
         </div>
+        {showAddFinding && (
+          <div className="form-row" style={{ marginTop: 12, alignItems: "flex-end" }}>
+            <label className="field">
+              <span>{t("find.manualTitle")}</span>
+              <input
+                type="text"
+                value={addTitle}
+                onChange={(e) => setAddTitle(e.target.value)}
+                placeholder={t("find.manualTitlePh")}
+              />
+            </label>
+            <label className="field">
+              <span>{t("find.severity")}</span>
+              <select value={addSev} onChange={(e) => setAddSev(e.target.value)}>
+                {SEV_ORDER.slice()
+                  .reverse()
+                  .map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <label className="field" style={{ flex: "1 1 260px" }}>
+              <span>{t("narr.desc")}</span>
+              <input
+                type="text"
+                value={addDesc}
+                onChange={(e) => setAddDesc(e.target.value)}
+                placeholder={t("find.manualDescPh")}
+              />
+            </label>
+            <button
+              className="btn"
+              onClick={submitAddFinding}
+              disabled={addBusy || !addTitle.trim()}
+            >
+              {addBusy ? t("common.loading") : t("find.addManualSubmit")}
+            </button>
+          </div>
+        )}
         {narrMsg && (
           <div className="alert ok" style={{ marginTop: 10 }}>
             {narrMsg}
@@ -1276,6 +1353,12 @@ export default function EngagementDetailPage() {
                                           ? t("review.final")
                                           : `${t("review.aiDraft")} · ${detail.ai_model} · ${detail.ai_prompt_version}`}
                                       </div>
+                                      {detail.ai_draft?.injection_flagged && (
+                                        <div className="alert warn" style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                                          <ShieldWarning size={16} weight="fill" />
+                                          {t("narr.injectionWarning")}
+                                        </div>
+                                      )}
                                       <div>
                                         <strong>{t("narr.desc")}:</strong> {n.description || "—"}
                                       </div>
@@ -1800,6 +1883,12 @@ export default function EngagementDetailPage() {
 
         {summary ? (
           <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
+            {summary.injection_flagged && (
+              <div className="alert warn" style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <ShieldWarning size={16} weight="fill" />
+                {t("narr.injectionWarning")}
+              </div>
+            )}
             <div>
               <strong>{t("sum.overview")}:</strong>
               <p style={{ margin: "4px 0 0" }}>{summary.overview || "—"}</p>
